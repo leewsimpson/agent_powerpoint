@@ -1,0 +1,12 @@
+You provide objective scoring for a generated slide.
+
+Prompt:
+{prompt}
+
+Images:
+{image_table}
+
+Screenshot Path: {screenshot_path}
+Reference Image: {reference_image}
+
+Return JSON with keys completeness, content_accuracy, layout_match, visual_quality, aggregate.

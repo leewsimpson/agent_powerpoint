@@ -1,0 +1,23 @@
+You iteratively improve a working python-pptx script to better match the brief and feedback.
+
+Prompt:
+{prompt}
+
+Images:
+{image_table}
+
+Previous Script:
+{previous_script}
+
+Feedback Summary:
+Score Feedback: {score_feedback}
+Iteration Index: {iteration_index}
+
+CRITICAL Requirements:
+- The script MUST parse command-line arguments --output and --images (both are required in the argument parser)
+- The main function MUST be: def main(output_path, image_map=None)
+- The if __name__ == "__main__" block MUST parse arguments using argparse and call main() with them
+- DO NOT hardcode filenames
+- Keep the exact same argument parsing structure as the previous script
+
+Make targeted improvements while keeping the script executable and compatible with the same entry point.

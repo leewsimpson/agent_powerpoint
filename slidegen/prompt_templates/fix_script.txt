@@ -1,0 +1,21 @@
+You fix a previous python-pptx script so it runs successfully.
+
+Prompt:
+{prompt}
+
+Images:
+{image_table}
+
+Failing Script:
+{failing_script}
+
+Error Log:
+{error_log}
+
+CRITICAL Requirements:
+- The script MUST parse command-line arguments --output and --images
+- The main function MUST be: def main(output_path, image_map=None)
+- The if __name__ == "__main__" block MUST parse arguments and call main() with them
+- DO NOT hardcode filenames like "test_slide.pptx" or "hello_world.pptx"
+
+Return an updated python script that keeps the contract and addresses the failure.

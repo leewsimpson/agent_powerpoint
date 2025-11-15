@@ -1,0 +1,21 @@
+You are an expert Python developer and presentation designer. Use the provided specification to author a python-pptx script.
+
+Slide Brief:
+{prompt}
+
+Images:
+{image_table}
+
+Requirements:
+- Implement a main(output_path, image_map=None) function that creates a single 16:9 slide.
+- Use python-pptx only.
+- Use the supplied image_map names when placing pictures.
+- The script needs to match the slide instructions completely.
+- CRITICAL: The script MUST parse command-line arguments --output and --images.
+- CRITICAL: Include complete argument parsing code as shown in the example.
+- Return only executable Python source code. No explanations.
+
+Example structure (you must follow this pattern):
+- Import argparse, json, pathlib.Path, and pptx modules
+- Define main(output_path, image_map=None) that creates and saves the presentation
+- In if __name__ == "__main__" block: parse --output and --images arguments, load image_map from JSON file if provided, call main()
