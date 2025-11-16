@@ -1,120 +1,157 @@
 ## Python SlideGen
 
-Python SlideGen orchestrates an LLM driven workflow that converts a prompt plus optional reference layout image and asset images into a PPTX slide, complete with execution, screenshot capture, scoring, and iterative improvement loops. Prompt templates that steer the LLM live under `slidegen/prompt_templates/` and are loaded at runtime so they can be reviewed or customised without touching the codebase.
+Python SlideGen is an LLM-driven tool that automates the creation of PowerPoint slides. It takes a natural language prompt, an optional reference image for layout, and optional asset images, and generates a complete `.pptx` slide.
+
+The core of the process is a multi-step workflow that uses a Large Language Model (LLM) to:
+1.  **Generate a Python script**: Based on the user's prompt, it creates a `python-pptx` script to build the slide.
+2.  **Execute and Capture**: The script is run, producing a `.pptx` file. A screenshot of the slide is then taken.
+3.  **Score and Iterate**: The LLM scores the resulting slide against the original prompt. If the score is too low or the script fails, it enters a fix-and-improve loop, generating a new script until the quality target is met.
+
+This iterative process ensures a high-quality output that aligns with the user's request. All artifacts, including generated scripts, logs, and slides, are saved for each run.
+
+![Workflow](design.png)
 
 ### Quick Start
 
 **Prerequisites:**
 
-Screenshot generation requires LibreOffice and PyMuPDF. See [HEADLESS_SETUP.md](HEADLESS_SETUP.md) for installation instructions for your platform.
+Screenshot generation requires LibreOffice. See [HEADLESS_SETUP.md](HEADLESS_SETUP.md) for platform-specific installation instructions.
 
 **Setup:**
 
-1. Create and populate a `.env` file (see `requirements.md`):
-	```env
-	OPENAI_USE_MOCK=true
-	DEFAULT_OUTPUT_DIR=./runs
-	
-	# For reasoning models (o1, o3, gpt-5)
-	OPENAI_REASONING_EFFORT=medium
-	```
-	Add real OpenAI credentials (`OPENAI_API_KEY`, models, etc.) when ready to integrate with the API.
-	
-	**Reasoning Effort Configuration:**
-	When using reasoning models (o1, o3, or gpt-5), the `OPENAI_REASONING_EFFORT` setting controls how deeply the model thinks before responding:
-	- `minimal`: Fastest response time, less reasoning tokens
-	- `low`: Balance between speed and reasoning
-	- `medium`: Default, balanced approach (recommended)
-	- `high`: Most thorough reasoning, slower but potentially better results
+1.  **Install Dependencies:**
+    This project uses `uv` for dependency management. Install the required packages by running:
+    ```sh
+    uv sync
+    ```
 
-2. Install dependencies (using [uv](https://github.com/astral-sh/uv) as recommended):
-	```sh
-	uv sync
-	```
+2.  **Configure Environment:**
+    Create a `.env` file in the project root. For mock mode (no OpenAI API key needed), you can use:
+    ```env
+    OPENAI_USE_MOCK=true
+    ```
+    To use the OpenAI API, provide your credentials:
+    ```env
+    OPENAI_API_KEY="sk-..."
+    # OPENAI_DEFAULT_MODEL="gpt-4o"
+    # OPENAI_VISION_MODEL="gpt-4o"
+    ```
+    See the **Configuration** section below for more details on available settings.
 
-3. Run the CLI (easy command after `uv sync`):
-	```sh
-	# Simple slide with text
-	uv run slidegen --prompt "Quarterly Results\nRevenue up 25%\nExpanding to new markets"
-	
-	# With asset images
-	uv run slidegen --prompt "Product Launch" --image logo|c:/images/logo.png|Company logo top-right --image chart|c:/images/chart.png|Sales chart center
-	
-	# With reference layout image for design guidance
-	uv run slidegen --prompt-file presentation.txt --reference-image c:/layouts/corporate_template.png
-	
-	# Use mock mode explicitly
-	uv run slidegen --prompt "Team Overview" --mock-openai
-	```
+3.  **Run the CLI:**
+    Use `uv run` to execute the slide generation script.
 
-**What happens:**
-- The CLI generates a PowerPoint slide based on your prompt
-- The best slide is automatically saved to your workspace (e.g., `slide_20241116_123456.pptx`)
-- All artifacts live under `runs/<run_id>/` for inspection
-- A JSON summary shows the run ID, score, and file locations
+    **Examples:**
+    ```sh
+    # Simple slide with text
+    uv run slidegen --prompt "Quarterly Results\nRevenue up 25%\nExpanding to new markets"
+
+    # With asset images (note the 'name|/path/to/image|description' format)
+    uv run slidegen --prompt "Product Launch" --image "logo|C:/images/logo.png|Company logo, top-right" --image "chart|C:/images/chart.png|Sales chart, center"
+
+    # With a reference image for layout guidance
+    uv run slidegen --prompt-file "presentation.txt" --reference-image "C:/layouts/corporate_template.png"
+
+    # Force mock mode for a quick test
+    uv run slidegen --prompt "Team Overview" --mock-openai
+    ```
+
+**What Happens:**
+
+*   The CLI generates a PowerPoint slide based on your prompt.
+*   The best-scoring slide is automatically saved to your workspace root (e.g., `slide_20251116_123456.pptx`).
+*   All artifacts, including scripts, logs, intermediate presentations, and screenshots, are stored in the `runs/<run_id>/` directory for inspection.
+*   A JSON summary is printed to the console with the run ID, final score, and output file locations.
+
+### CLI Options
+
+| Argument | Description |
+| --- | --- |
+| `--prompt "text"` | Inline prompt text. Use `\n` for line breaks. |
+| `--prompt-file <path>` | Path to a text or markdown file containing the prompt. |
+| `--image <spec>` | Adds an asset image to be embedded in the slide. The format is `name|/absolute/path/to/image.png|description`. This option can be used multiple times. |
+| `--reference-image <path>` | Optional path to a reference image for layout guidance (the image is not embedded). |
+| `--output-dir <path>` | Overrides the default output directory (`runs`). |
+| `--mock-openai` | Forces mock mode, which generates deterministic slides without calling the OpenAI API. |
+| `--real-openai` | Forces real OpenAI API usage, even if a key is not detected. |
+| `--run-id <id>` | Sets a custom identifier for the run. |
+
+### Configuration
+
+The application is configured via environment variables, which can be placed in a `.env` file in the project root.
+
+#### Core Settings
+| Variable | Description | Default |
+| --- | --- | --- |
+| `OPENAI_USE_MOCK` | If `true`, the application runs in mock mode without using the OpenAI API. | `true` if no API key is found |
+| `DEFAULT_OUTPUT_DIR` | The directory where run artifacts are stored. | `./runs` |
+| `WORKSPACE_DIR` | The root directory of the workspace. | Current working directory |
+
+#### OpenAI Settings
+| Variable | Description | Default |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Your OpenAI API key. | `None` |
+| `OPENAI_DEFAULT_MODEL` | The model used for text and script generation. | `gpt-4o-mini` |
+| `OPENAI_VISION_MODEL` | The model used for vision-related tasks (e.g., analyzing reference images). | `gpt-4o-mini` |
+| `OPENAI_REASONING_EFFORT` | Controls the reasoning depth of the model. Can be `minimal`, `low`, `medium`, or `high`. | `medium` |
+
+#### Azure OpenAI Settings
+| Variable | Description | Default |
+| --- | --- | --- |
+| `USE_AZURE` | Set to `true` to use Azure OpenAI services. | `false` |
+| `AZURE_OPENAI_API_KEY` | Your Azure OpenAI API key. | `None` |
+| `AZURE_OPENAI_ENDPOINT` | The endpoint for your Azure OpenAI resource. | `None` |
+| `AZURE_OPENAI_DEPLOYMENT` | The name of your Azure OpenAI deployment. | `None` |
+| `AZURE_OPENAI_API_VERSION` | The API version to use. | `2024-10-21` |
+
+#### Behavior Settings
+| Variable | Description | Default |
+| --- | --- | --- |
+| `MAX_SCRIPT_RETRIES` | The maximum number of times to retry a failed script. | `3` |
+| `MAX_IMPROVEMENT_ITERATIONS` | The maximum number of improvement loops to run. | `2` |
+| `EXECUTION_TIMEOUT_SECONDS` | The timeout for running a generated Python script. | `120` |
+| `TARGET_SCORE_THRESHOLD` | The target score (out of 100) to achieve before stopping the improvement loop. | `80` |
+
+#### Scoring Weights
+The final score is a weighted average of several dimensions. The weights must sum to 1.0.
+| Variable | Description | Default |
+| --- | --- | --- |
+| `SCORE_WEIGHT_COMPLETENESS` | Weight for prompt completeness. | `0.3` |
+| `SCORE_WEIGHT_CONTENT_ACCURACY` | Weight for content accuracy. | `0.3` |
+| `SCORE_WEIGHT_LAYOUT_MATCH` | Weight for layout match against the reference image. | `0.25` |
+| `SCORE_WEIGHT_VISUAL_QUALITY` | Weight for overall visual quality. | `0.15` |
+
 
 ### Development
 
-- Execute the unit test suite:
+- **Run Unit Tests:**
   ```sh
   uv run pytest
   ```
-- Run the orchestrator locally:
+- **Run the Orchestrator Locally:**
   ```sh
   uv run slidegen --prompt "Title\nBullet one" --mock-openai
   ```
 
-### CLI Options
-
-```
---prompt "text"              Inline prompt text (use \n for line breaks)
---prompt-file path.txt       Load prompt from a text file
---image name|path|desc       Add asset images to embed in slide (repeatable). Format: name|/path/to/image.png|description
---reference-image path.png   Optional reference layout image for design guidance (not embedded)
---output-dir /custom/path    Override default output directory
---mock-openai                Force mock mode (generates deterministic slides)
---real-openai                Force real OpenAI API usage
---log-level DEBUG            Set logging level (DEBUG, INFO, WARNING, ERROR)
---run-id custom_id           Custom run identifier
-```
-
-**Examples:**
-
-```sh
-# Marketing slide with logo asset
-uv run slidegen --prompt "New Campaign\n50% off all items\nLimited time only" --image logo|c:/assets/brand.png|Top left corner
-
-# Technical presentation with asset image and reference layout
-uv run slidegen --prompt-file architecture.txt --image diagram|./diagrams/system.png|Center aligned architecture diagram --reference-image ./layouts/tech_template.png
-
-# Quick test in mock mode
-uv run slidegen --prompt "Test Slide" --mock-openai --log-level DEBUG
-
-# Production mode with real AI
-uv run slidegen --prompt "Executive Summary\nQ4 2024 Results" --real-openai
-```
-
 ### Architecture Highlights
 
-- `slidegen.config`: loads `.env` + environment overrides into typed settings.
-- `slidegen.prompt_store`: loads text prompt templates from disk and formats them for API calls.
-- `slidegen.openai_client`: mock-friendly LLM façade that generates `python-pptx` scripts, implements fix/improve cycles, and provides lightweight scoring. Templates are read from disk before each request so a future OpenAI integration can use the same payloads.
-- `slidegen.state`: state machine that drives generation, execution, fix loop, screenshot capture, scoring, and improvement iterations.
-- `slidegen.execution`: runs generated scripts in a subprocess, enforces contracts, and validates PPTX output.
-- `slidegen.screenshot`: captures screenshots using headless LibreOffice + PyMuPDF (server-friendly), or placeholder generation in mock mode.
-- `slidegen.scoring`: aggregates model scores with configurable weights.
+- **`slidegen.config`**: Loads `.env` settings and environment variables into a typed `Settings` object.
+- **`slidegen.prompt_store`**: Loads and formats text-based prompt templates from the `prompt_templates` directory.
+- **`slidegen.openai_client`**: A mock-friendly façade for interacting with LLMs. It generates `python-pptx` scripts, manages fix/improve cycles, and performs scoring.
+- **`slidegen.state`**: A state machine that orchestrates the entire workflow: generation, execution, screenshotting, scoring, and improvement loops.
+- **`slidegen.execution`**: Runs generated scripts in a secure subprocess, validates the output PPTX, and captures logs.
+- **`slidegen.screenshot`**: Captures slide screenshots using headless LibreOffice and PyMuPDF for high-fidelity, server-friendly rendering.
+- **`slidegen.scoring`**: Aggregates scores from the LLM based on the configured weights.
 
-Refer to `AGENT.md` for applied guidelines during development.
+Refer to `AGENT.md` for the development guidelines that were applied to this project.
 
 ### How The Workflow Runs
 
-1. **Prompt intake** – The CLI validates the user prompt, optional asset image descriptors, and an optional reference layout image for design guidance.
-2. **Prompt templating** – `OpenAIClient` formats disk-based templates with the current run context (prompt text, asset images, reference layout, iteration feedback).
-3. **Script generation** – In mock mode a deterministic generator returns a `python-pptx` script; in production the formatted template will be sent to the OpenAI API.
-4. **Script execution** – The `ExecutionEngine` runs the generated script via `uv run python …` when available, validates slide output, and persists logs.
-5. **Screenshot capture** – `ScreenshotService` converts PPTX to image using headless LibreOffice + PyMuPDF and stores it with the run artifacts.
-6. **Scoring** – `ScoringService` asks the LLM (via templates) to rate the slide, combines dimension scores using configured weights, and updates run metadata.
-7. **Fix / improve loops** – Failures trigger the fix template; successful but sub-par slides re-enter the improvement loop until thresholds or iteration limits are met.
-8. **Artifacts & metadata** – Every run produces scripts, PPTX files, screenshots, logs, and a metadata.json describing iteration lineage and scores.
+1.  **Prompt Intake**: The CLI validates the user's prompt, asset image specifications, and optional reference layout image.
+2.  **Script Generation**: `OpenAIClient` formats a prompt template with the run context and sends it to the LLM to generate a `python-pptx` script. In mock mode, a deterministic script is used instead.
+3.  **Script Execution**: The `ExecutionEngine` runs the generated script in a sandboxed environment, validates the resulting `.pptx` file, and saves all logs.
+4.  **Screenshot Capture**: `ScreenshotService` converts the generated slide into a PNG image for visual inspection and scoring.
+5.  **Scoring**: `ScoringService` uses the LLM to rate the slide across several dimensions (completeness, accuracy, etc.) and calculates a weighted final score.
+6.  **Fix/Improve Loops**: If the script fails, a "fix" prompt is sent to the LLM. If the slide's score is below the target threshold, an "improvement" prompt is sent. This loop continues until the target score, retry limit, or iteration limit is reached.
+7.  **Artifacts & Metadata**: Every run produces scripts, `.pptx` files, screenshots, logs, and a `metadata.json` file that describes the entire process, including iteration history and scores. All artifacts are saved in the `runs/<run_id>/` directory.
 
-The end-to-end process is captured in `runs/<run_id>/` so you can inspect every intermediate artifact.
