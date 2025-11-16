@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional
 
-from openai import OpenAI
+from openai import AzureOpenAI, OpenAI
 
 from .config import OpenAIConfig
 from .logging_config import get_logger, log_ai_request, log_ai_response
@@ -29,9 +29,22 @@ class OpenAIClient:
     def __init__(self, config: OpenAIConfig, prompt_store: PromptStore | None = None) -> None:
         self._config = config
         self._prompt_store = prompt_store or PromptStore()
-        self._client: Optional[OpenAI] = None
+        self._client: Optional[OpenAI | AzureOpenAI] = None
         if not config.mock_mode and config.api_key:
-            self._client = OpenAI(api_key=config.api_key)
+            if config.use_azure:
+                # Initialize Azure OpenAI client
+                if not config.azure_endpoint:
+                    raise ValueError("azure_endpoint is required for Azure OpenAI")
+                if not config.azure_api_version:
+                    raise ValueError("azure_api_version is required for Azure OpenAI")
+                self._client = AzureOpenAI(
+                    api_key=config.api_key,
+                    azure_endpoint=config.azure_endpoint,
+                    api_version=config.azure_api_version,
+                )
+            else:
+                # Initialize standard OpenAI client
+                self._client = OpenAI(api_key=config.api_key)
 
     def generate_initial_script(
             self, 
@@ -62,10 +75,11 @@ class OpenAIClient:
         prompt: str,
         image_assets: Iterable[ImageInput],
         failing_script: str,
-        error_log: str,
+        errors: list[str],
     ) -> ScriptGenerationResult:
         
         image_list = list(image_assets)
+        error_log = "\n".join(errors) if errors else "No error details provided"
         prompt_payload = self._render_template(
             "fix_script",
             prompt=prompt,
@@ -78,7 +92,7 @@ class OpenAIClient:
         
         if self._config.mock_mode or not self._client:
             logger.info("Using mock mode for script fix")
-            script = self._mock_render_script(prompt, image_list, iteration_tag="fixed")
+            script = self._mock_render_script(prompt, iteration_tag="fixed")
             request_id = self._mock_request_id(prompt_payload)
         else:
             script, request_id = self._call_openai_with_vision(prompt_payload=prompt_payload)
@@ -100,11 +114,12 @@ class OpenAIClient:
         iteration_tag = f"improved_{iteration_index}"
         prompt_payload = self._render_template(
             "improve_script",
-            slide_brief=prompt,
-            image_assets=self._format_images(image_assets),
+            prompt=prompt,
+            image_table=self._format_images(image_assets),
             previous_script=previous_script,
             score_feedback=self._format_score(score_feedback),
             iteration_index=iteration_index,
+            previous_screenshot=str(previous_screenshot) if previous_screenshot else "None",
         )
         
         log_ai_request(logger=logger, operation=f"IMPROVE SCRIPT (iteration {iteration_index})", prompt=prompt_payload, reference_image=reference_image,  model=self._config.default_model)
@@ -254,8 +269,11 @@ class OpenAIClient:
                 logger.warning("Previous screenshot does not exist: %s", previous_screenshot)
             
             # Build API parameters
+            # For Azure OpenAI, use deployment name if provided, otherwise use default_model
+            model_name = self._config.azure_deployment if self._config.use_azure and self._config.azure_deployment else self._config.default_model
+            
             api_params: dict[str, object] = {
-                "model": self._config.default_model,
+                "model": model_name,
                 "messages": [
                     {"role": "system", "content": "You are an expert Python developer. Return only executable Python code."},
                     {"role": "user", "content": content}
@@ -263,8 +281,11 @@ class OpenAIClient:
             }
             
             # Configure parameters based on model type
-            if self._is_reasoning_model(self._config.default_model):
-                # Reasoning models (o1, o3) don't support temperature
+            # Check both the configured model name and the actual deployment/model being used
+            is_reasoning = self._is_reasoning_model(self._config.default_model) or self._is_reasoning_model(model_name)
+            
+            if is_reasoning:
+                # Reasoning models (o1, o3, gpt-5) don't support custom temperature
                 # but do support reasoning_effort
                 api_params["reasoning_effort"] = self._config.reasoning_effort
                 logger.info("Using reasoning model with effort: %s", self._config.reasoning_effort)
@@ -359,17 +380,16 @@ class OpenAIClient:
         
         Reasoning models use a different parameter set than standard models:
         - They support reasoning_effort instead of temperature
-        - They include o1, o3, and their variants
+        - They include o1, o3, gpt-5, and their variants
         
         Args:
-            model: The model identifier (e.g., "gpt-4o", "o1-preview")
+            model: The model identifier (e.g., "gpt-4o", "o1-preview", "gpt-5")
             
         Returns:
             True if the model is a reasoning model, False otherwise
         """
-        # Reasoning models include o1, o3, and their variants
-        # Note: gpt-5 may or may not be a reasoning model when released
-        reasoning_model_prefixes = ("o1", "o3")
+        # Reasoning models include o1, o3, gpt-5, and their variants
+        reasoning_model_prefixes = ("o1", "o3", "gpt-5")
         return any(model.startswith(prefix) for prefix in reasoning_model_prefixes)
     
     @staticmethod

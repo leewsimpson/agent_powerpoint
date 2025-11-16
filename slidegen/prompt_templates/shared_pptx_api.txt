@@ -92,4 +92,99 @@
     - XL_TICK_LABEL_POSITION
     - XL_TICK_MARK
     - Excel Number Formats
+
+# Shapes[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#shapes "Permalink to this headline")
+
+The following classes provide access to the shapes that appear on a slide and the collections that contain them.
+
+## [`SlideShapes`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes "pptx.shapes.shapetree.SlideShapes") objects[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#slideshapes-objects "Permalink to this headline")
+
+The [`SlideShapes`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes "pptx.shapes.shapetree.SlideShapes") object is encountered as the `shapes` property of [`Slide`](https://python-pptx.readthedocs.io/en/latest/api/slides.html#pptx.slide.Slide "pptx.slide.Slide").
+
+_class_ `pptx.shapes.shapetree.``SlideShapes`[\[source\]](https://python-pptx.readthedocs.io/en/latest/_modules/pptx/shapes/shapetree.html#SlideShapes)[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes "Permalink to this definition")
+
+Sequence of shapes appearing on a slide.
+
+The first shape in the sequence is the backmost in z-order and the last shape is topmost. Supports indexed access, len(), index(), and iteration.
+
+`add_chart`(_chart\_type: XL\_CHART\_TYPE_, _x: Length_, _y: Length_, _cx: Length_, _cy: Length_, _chart\_data: ChartData_) → Chart[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_chart "Permalink to this definition")
+
+Add a new chart of chart\_type to the slide.
+
+The chart is positioned at (x, y), has size (cx, cy), and depicts chart\_data. chart\_type is one of the [XL\_CHART\_TYPE](https://python-pptx.readthedocs.io/en/latest/api/enum/XlChartType.html#xlcharttype) enumeration values. chart\_data is a [`ChartData`](https://python-pptx.readthedocs.io/en/latest/api/chart-data.html#pptx.chart.data.ChartData "pptx.chart.data.ChartData") object populated with the categories and series values for the chart.
+
+Note that a [`GraphicFrame`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.graphfrm.GraphicFrame "pptx.shapes.graphfrm.GraphicFrame") shape object is returned, not the [`Chart`](https://python-pptx.readthedocs.io/en/latest/api/chart.html#pptx.chart.chart.Chart "pptx.chart.chart.Chart") object contained in that graphic frame shape. The chart object may be accessed using the `chart` property of the returned [`GraphicFrame`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.graphfrm.GraphicFrame "pptx.shapes.graphfrm.GraphicFrame") object.
+
+`add_connector`(_connector\_type: MSO\_CONNECTOR\_TYPE_, _begin\_x: Length_, _begin\_y: Length_, _end\_x: Length_, _end\_y: Length_) → Connector[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_connector "Permalink to this definition")
+
+Add a newly created connector shape to the end of this shape tree.
+
+connector\_type is a member of the [MSO\_CONNECTOR\_TYPE](https://python-pptx.readthedocs.io/en/latest/api/enum/MsoConnectorType.html#msoconnectortype) enumeration and the end-point values are specified as EMU values. The returned connector is of type connector\_type and has begin and end points as specified.
+
+`add_group_shape`(_shapes: Iterable\[pptx.shapes.base.BaseShape\] = ()_) → pptx.shapes.group.GroupShape[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_group_shape "Permalink to this definition")
+
+Return a [`GroupShape`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.group.GroupShape "pptx.shapes.group.GroupShape") object newly appended to this shape tree.
+
+The group shape is empty and must be populated with shapes using methods on its shape tree, available on its .shapes property. The position and extents of the group shape are determined by the shapes it contains; its position and extents are recalculated each time a shape is added to it.
+
+`add_movie`(_movie\_file: str | IO\[bytes\], left: Length, top: Length, width: Length, height: Length, poster\_frame\_image: str | IO\[bytes\] | None = None, mime\_type: str = 'video/unknown'_) → GraphicFrame[\[source\]](https://python-pptx.readthedocs.io/en/latest/_modules/pptx/shapes/shapetree.html#SlideShapes.add_movie)[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_movie "Permalink to this definition")
+
+Return newly added movie shape displaying video in movie\_file.
+
+**EXPERIMENTAL.** This method has important limitations:
+
+-   The size must be specified; no auto-scaling such as that provided by [`add_picture()`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_picture "pptx.shapes.shapetree.SlideShapes.add_picture") is performed.
+-   The MIME type of the video file should be specified, e.g. ‘video/mp4’. The provided video file is not interrogated for its type. The MIME type video/unknown is used by default (and works fine in tests as of this writing).
+-   A poster frame image must be provided, it cannot be automatically extracted from the video file. If no poster frame is provided, the default “media loudspeaker” image will be used.
+
+Return a newly added movie shape to the slide, positioned at (left, top), having size (width, height), and containing movie\_file. Before the video is started, poster\_frame\_image is displayed as a placeholder for the video.
+
+`add_ole_object`(_object\_file: str | IO\[bytes\], prog\_id: str, left: Length, top: Length, width: Length | None = None, height: Length | None = None, icon\_file: str | IO\[bytes\] | None = None, icon\_width: Length | None = None, icon\_height: Length | None = None_) → GraphicFrame[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_ole_object "Permalink to this definition")
+
+Return newly-created GraphicFrame shape embedding object\_file.
+
+The returned graphic-frame shape contains object\_file as an embedded OLE object. It is displayed as an icon at left, top with size width, height. width and height may be omitted when prog\_id is a member of PROG\_ID, in which case the default icon size is used. This is advised for best appearance where applicable because it avoids an icon with a “stretched” appearance.
+
+object\_file may either be a str path to a file or file-like object (such as io.BytesIO) containing the bytes of the object to be embedded (such as an Excel file).
+
+prog\_id can be either a member of pptx.enum.shapes.PROG\_ID or a str value like “Adobe.Exchange.7” determined by inspecting the XML generated by PowerPoint for an object of the desired type.
+
+icon\_file may either be a str path to an image file or a file-like object containing the image. The image provided will be displayed in lieu of the OLE object; double-clicking on the image opens the object (subject to operating-system limitations). The image file can be any supported image file. Those produced by PowerPoint itself are generally EMF and can be harvested from a PPTX package that embeds such an object. PNG and JPG also work fine.
+
+icon\_width and icon\_height are Length values (e.g. Emu() or Inches()) that describe the size of the icon image within the shape. These should be omitted unless a custom icon\_file is provided. The dimensions must be discovered by inspecting the XML. Automatic resizing of the OLE-object shape can occur when the icon is double-clicked if these values are not as set by PowerPoint. This behavior may only manifest in the Windows version of PowerPoint.
+
+`add_picture`(_image\_file: str | IO\[bytes\], left: Length, top: Length, width: Length | None = None, height: Length | None = None_) → Picture[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_picture "Permalink to this definition")
+
+Add picture shape displaying image in image\_file.
+
+image\_file can be either a path to a file (a string) or a file-like object. The picture is positioned with its top-left corner at (top, left). If width and height are both `None`, the native size of the image is used. If only one of width or height is used, the unspecified dimension is calculated to preserve the aspect ratio of the image. If both are specified, the picture is stretched to fit, without regard to its native aspect ratio.
+
+`add_shape`(_autoshape\_type\_id: MSO\_SHAPE_, _left: Length_, _top: Length_, _width: Length_, _height: Length_) → Shape[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_shape "Permalink to this definition")
+
+Return new [`Shape`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.autoshape.Shape "pptx.shapes.autoshape.Shape") object appended to this shape tree.
+
+autoshape\_type\_id is a member of [MSO\_AUTO\_SHAPE\_TYPE](https://python-pptx.readthedocs.io/en/latest/api/enum/MsoAutoShapeType.html#msoautoshapetype) e.g. MSO\_SHAPE.RECTANGLE specifying the type of shape to be added. The remaining arguments specify the new shape’s position and size.
+
+`add_table`(_rows: int_, _cols: int_, _left: Length_, _top: Length_, _width: Length_, _height: Length_) → GraphicFrame[\[source\]](https://python-pptx.readthedocs.io/en/latest/_modules/pptx/shapes/shapetree.html#SlideShapes.add_table)[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_table "Permalink to this definition")
+
+Add a [`GraphicFrame`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.graphfrm.GraphicFrame "pptx.shapes.graphfrm.GraphicFrame") object containing a table.
+
+The table has the specified number of rows and cols and the specified position and size. width is evenly distributed between the columns of the new table. Likewise, height is evenly distributed between the rows. Note that the .table property on the returned [`GraphicFrame`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.graphfrm.GraphicFrame "pptx.shapes.graphfrm.GraphicFrame") shape must be used to access the enclosed `Table` object.
+
+`add_textbox`(_left: Length_, _top: Length_, _width: Length_, _height: Length_) → Shape[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.add_textbox "Permalink to this definition")
+
+Return newly added text box shape appended to this shape tree.
+
+The text box is of the specified size, located at the specified position on the slide.
+
+`build_freeform`(_start\_x: float = 0_, _start\_y: float = 0_, _scale: tuple\[float_, _float\] | float = 1.0_) → FreeformBuilder[¶](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.shapetree.SlideShapes.build_freeform "Permalink to this definition")
+
+Return [`FreeformBuilder`](https://python-pptx.readthedocs.io/en/latest/api/shapes.html#pptx.shapes.freeform.FreeformBuilder "pptx.shapes.freeform.FreeformBuilder") object to specify a freeform shape.
+
+The optional start\_x and start\_y arguments specify the starting pen position in local coordinates. They will be rounded to the nearest integer before use and each default to zero.
+
+The optional scale argument specifies the size of local coordinates proportional to slide coordinates (EMU). If the vertical scale is different than the horizontal scale (local coordinate units are “rectangular”), a pair of numeric values can be provided as the scale argument, e.g. scale=(1.0, 2.0). In this case the first number is interpreted as the horizontal (X) scale and the second as the vertical (Y) scale.
+
+A convenient method for calculating scale is to divide a [`Length`](https://python-pptx.readthedocs.io/en/latest/api/util.html#pptx.util.Length "pptx.util.Length") object by an equivalent count of local coordinate units, e.g. scale = Inches(1)/1000 for 1000 local units per inch.
+
 </python-pptx_documentation_reminder>

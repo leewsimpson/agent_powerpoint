@@ -98,6 +98,7 @@ class SlideGenStateMachine:
                 last_script=current_version,
                 last_script_content=generation.script,
                 script_cache=script_cache,
+                initial_execution=execution,
             )
             if not execution or not execution.success:
                 metadata.status = PipelineStage.FAILED
@@ -234,17 +235,19 @@ class SlideGenStateMachine:
         last_script: ScriptVersion,
         last_script_content: str,
         script_cache: Dict[str, str],
+        initial_execution: ExecutionResult,
     ) -> Optional[ExecutionResult]:
         attempts = self._settings.behavior.max_script_retries
         logger.info("Entering fix loop (max %d attempts)", attempts)
-        execution: Optional[ExecutionResult] = None
+        execution: Optional[ExecutionResult] = initial_execution
         for attempt in range(1, attempts + 1):
             logger.info("Fix attempt %d/%d", attempt, attempts)
+            errors = [execution.stderr] if execution and execution.stderr else []
             fix_result = self._openai.fix_script(
                 prompt=request.prompt,
                 image_assets=stored_images,
                 failing_script=last_script_content,
-                error_log=execution.stderr if execution else "",
+                errors=errors,
             )
             fixed_version = script_manager.create_version(
                 content=fix_result.script,

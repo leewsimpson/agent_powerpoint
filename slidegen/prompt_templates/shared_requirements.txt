@@ -10,4 +10,6 @@
     - Define main(output_path, image_map=None) that creates and saves the presentation
     - In if __name__ == "__main__" block: parse --output and --images arguments, load image_map from JSON file if provided, call main()
     - The script MUST parse command-line arguments --output and --images.
+- Common Errors to avoid:
+    - 'SlideShapes' object has no attribute 'add_oval'
 <critial_requirements>

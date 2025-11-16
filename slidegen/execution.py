@@ -35,15 +35,20 @@ class ExecutionEngine:
         with image_map_path.open("w", encoding="utf-8") as handle:
             json.dump({name: str(path) for name, path in image_map.items()}, handle)
 
-        command = self._build_command(script.path, output_path, image_map_path)
+        # Make paths relative to run_paths.base_dir since we use it as cwd
+        script_path_rel = script.path.relative_to(self._run_paths.base_dir)
+        output_path_rel = output_path.relative_to(self._run_paths.base_dir)
+        image_map_path_rel = image_map_path.relative_to(self._run_paths.base_dir)
+        
+        command = self._build_command(script_path_rel, output_path_rel, image_map_path_rel)
         
         logger.info("=" * 80)
         logger.info("SCRIPT EXECUTION: %s", script.version_id)
         logger.info("-" * 80)
         logger.info("Command: %s", ' '.join(str(c) for c in command))
         logger.info("Working directory: %s", self._run_paths.base_dir)
-        logger.info("Output path: %s", output_path)
-        logger.info("Image map: %s", image_map_path)
+        logger.info("Output path: %s", output_path_rel)
+        logger.info("Image map: %s", image_map_path_rel)
         logger.info("Timeout: %d seconds", self._behavior.execution_timeout_seconds)
         logger.info("-" * 80)
 
@@ -159,10 +164,17 @@ class ExecutionEngine:
     @staticmethod
     def _validate_presentation(pptx_path: Path) -> None:
         logger.info("Validating presentation: %s", pptx_path)
+        # Use a context manager pattern to ensure file is closed
+        # python-pptx doesn't provide a close() method, but we can delete the object
+        # to ensure file handles are released
         presentation = Presentation(pptx_path)
-        if len(presentation.slides) == 0:
-            raise ValueError("Presentation has no slides")
-        logger.info("Presentation has %d slide(s)", len(presentation.slides))
+        try:
+            if len(presentation.slides) == 0:
+                raise ValueError("Presentation has no slides")
+            logger.info("Presentation has %d slide(s)", len(presentation.slides))
+        finally:
+            # Explicitly delete to release file handle
+            del presentation
 
     def _build_command(self, script_path: Path, output_path: Path, image_map_path: Path) -> list[str]:
 

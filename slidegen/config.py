@@ -15,6 +15,11 @@ class OpenAIConfig:
     vision_model: str
     mock_mode: bool
     reasoning_effort: str  # "low", "medium", "high", or "minimal"
+    # Azure OpenAI specific settings
+    use_azure: bool
+    azure_endpoint: Optional[str]
+    azure_deployment: Optional[str]
+    azure_api_version: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -78,10 +83,29 @@ def load_settings(
     workspace_dir = Path(env_data.get("WORKSPACE_DIR", base_dir))
     default_output_dir = Path(env_data.get("DEFAULT_OUTPUT_DIR", workspace_dir / "runs"))
 
-    api_key = env_data.get("OPENAI_API_KEY")
+    # Determine if using Azure OpenAI
+    use_azure = _to_bool(env_data.get("USE_AZURE"), default=False)
+    
+    # Get API keys
+    api_key = env_data.get("AZURE_OPENAI_API_KEY" if use_azure else "OPENAI_API_KEY")
     mock_mode = _to_bool(env_data.get("OPENAI_USE_MOCK"), default=api_key is None)
-    if not mock_mode and not api_key:
-        raise ValueError("OPENAI_API_KEY is required when OPENAI_USE_MOCK is false")
+    
+    # Azure-specific settings
+    azure_endpoint = env_data.get("AZURE_OPENAI_ENDPOINT")
+    azure_deployment = env_data.get("AZURE_OPENAI_DEPLOYMENT")
+    azure_api_version = env_data.get("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    
+    # Validate configuration
+    if not mock_mode:
+        if use_azure:
+            if not api_key:
+                raise ValueError("AZURE_OPENAI_API_KEY is required when USE_AZURE is true and OPENAI_USE_MOCK is false")
+            if not azure_endpoint:
+                raise ValueError("AZURE_OPENAI_ENDPOINT is required when USE_AZURE is true")
+            if not azure_deployment:
+                raise ValueError("AZURE_OPENAI_DEPLOYMENT is required when USE_AZURE is true")
+        elif not api_key:
+            raise ValueError("OPENAI_API_KEY is required when OPENAI_USE_MOCK is false")
 
     openai = OpenAIConfig(
         api_key=api_key,
@@ -89,6 +113,10 @@ def load_settings(
         vision_model=env_data.get("OPENAI_VISION_MODEL", "gpt-4o-mini"),
         mock_mode=mock_mode,
         reasoning_effort=env_data.get("OPENAI_REASONING_EFFORT", "medium"),
+        use_azure=use_azure,
+        azure_endpoint=azure_endpoint,
+        azure_deployment=azure_deployment,
+        azure_api_version=azure_api_version,
     )
 
     behavior = BehaviorConfig(

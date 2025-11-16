@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import gc
 import platform
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -88,8 +90,10 @@ class ScreenshotService:
 
             # Rasterize first page using PyMuPDF
             logger.info("Step 2: Rasterizing first page of PDF with PyMuPDF...")
-            doc = pymupdf.open(str(pdf_path))
+            doc = None
+            pix = None
             try:
+                doc = pymupdf.open(str(pdf_path))
                 page = doc[0]
                 dpi = 150
                 zoom = dpi / 72.0
@@ -100,7 +104,17 @@ class ScreenshotService:
                 pix.save(str(destination))
                 logger.info("Screenshot saved: %s (%d bytes)", destination, destination.stat().st_size)
             finally:
-                doc.close()
+                # Ensure proper cleanup on Windows to release file handles
+                if pix is not None:
+                    del pix
+                if doc is not None:
+                    doc.close()
+                    del doc
+                # On Windows, force garbage collection and wait for file handles to release
+                # In debug mode, this may take longer
+                if platform.system() == "Windows":
+                    gc.collect()
+                    time.sleep(0.5)  # Increased from 0.2 to 0.5 for debug mode stability
 
         logger.info("Headless conversion complete")
         return destination
