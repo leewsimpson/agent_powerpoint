@@ -1,94 +1,52 @@
 from __future__ import annotations
 
-import logging
 import platform
 import shutil
 import subprocess
 import tempfile
-import time
 from pathlib import Path
-from typing import Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
 from .config import ScreenshotConfig
-from .viewer import ViewerLauncher
+from .logging_config import get_logger
 
-try:
-    import mss
-except ImportError:
-    mss = None  # type: ignore[assignment]
+import pymupdf
 
-try:
-    from pdf2image import convert_from_path
-except ImportError:
-    convert_from_path = None  # type: ignore[assignment]
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScreenshotService:
-    def __init__(self, config: ScreenshotConfig, viewer: ViewerLauncher, mock_mode: bool) -> None:
+    def __init__(self, config: ScreenshotConfig, mock_mode: bool) -> None:
         self._config = config
-        self._viewer = viewer
         self._mock_mode = mock_mode
-        self._headless_mode = self._detect_headless_capability()
-
-    def _detect_headless_capability(self) -> bool:
-        """Detect if we can use headless rendering (LibreOffice + pdf2image)."""
-        if not convert_from_path:
-            return False
-        
-        # Check for LibreOffice/soffice executable
-        candidates = ["soffice", "libreoffice"]
-        if platform.system() == "Windows":
-            # Common Windows paths
-            candidates.extend([
-                r"C:\Program Files\LibreOffice\program\soffice.exe",
-                r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            ])
-        
-        for candidate in candidates:
-            if shutil.which(candidate):
-                logger.info("Headless rendering available using: %s", candidate)
-                return True
-        
-        logger.info("Headless rendering not available (LibreOffice not found)")
-        return False
 
     def capture(self, pptx_path: Path, destination: Path) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
         
+        logger.info("Capturing screenshot for: %s", pptx_path)
+        logger.info("Destination: %s", destination)
+        
         if self._mock_mode:
-            logger.info("Creating placeholder screenshot (mock mode)")
+            logger.info("Using mock mode - creating placeholder screenshot")
             return self._create_placeholder(destination, pptx_path)
         
-        # Try headless rendering first (server-friendly)
-        if self._headless_mode:
-            logger.info("Attempting headless screenshot using LibreOffice")
-            return self._capture_headless(pptx_path, destination)
-        
-        # Fall back to GUI-based capture
-        if mss:
-            logger.info("Attempting GUI-based screenshot capture")
-            return self._capture_with_viewer(pptx_path, destination)
-        
-        # No screenshot method available - fail
-        raise RuntimeError(
-            "No screenshot capture method available. "
-            "Install LibreOffice + pdf2image for headless mode, or mss for GUI mode. "
-            "See HEADLESS_SETUP.md for installation instructions."
-        )
+        logger.info("Using headless LibreOffice + PyMuPDF conversion")
+        return self._capture_headless(pptx_path, destination)
 
     def _capture_headless(self, pptx_path: Path, destination: Path) -> Path:
-        """Convert PPTX to image using headless LibreOffice and pdf2image."""
+        """Convert PPTX to image using headless LibreOffice and PyMuPDF."""
+        logger.info("Starting headless conversion process")
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
-            
+            logger.info("Temporary directory: %s", tmpdir_path)
+
             # Convert PPTX to PDF using LibreOffice headless
-            logger.info("Converting PPTX to PDF...")
+            logger.info("Step 1: Converting PPTX to PDF using LibreOffice...")
             soffice_cmd = self._get_soffice_command()
-            
+            logger.info("LibreOffice command: %s", soffice_cmd)
+
             result = subprocess.run(
                 [
                     soffice_cmd,
@@ -101,45 +59,57 @@ class ScreenshotService:
                 capture_output=True,
                 timeout=30,
             )
-            
+
             if result.returncode != 0:
                 error_msg = f"LibreOffice conversion failed with code {result.returncode}"
                 if result.stderr:
-                    error_msg += f"\nStderr: {result.stderr.decode('utf-8', errors='replace')}"
+                    stderr_text = result.stderr.decode('utf-8', errors='replace')
+                    error_msg += f"\nStderr: {stderr_text}"
+                    logger.error("LibreOffice stderr: %s", stderr_text)
                 if result.stdout:
-                    error_msg += f"\nStdout: {result.stdout.decode('utf-8', errors='replace')}"
+                    stdout_text = result.stdout.decode('utf-8', errors='replace')
+                    error_msg += f"\nStdout: {stdout_text}"
+                    logger.info("LibreOffice stdout: %s", stdout_text)
+                logger.error("LibreOffice conversion failed")
                 raise RuntimeError(error_msg)
             
+            logger.info("LibreOffice conversion successful")
+
             # Find the generated PDF
             pdf_path = tmpdir_path / f"{pptx_path.stem}.pdf"
+            logger.info("Expected PDF path: %s", pdf_path)
+            
             if not pdf_path.exists():
-                # List all files in tmpdir for debugging
                 files = list(tmpdir_path.iterdir())
+                logger.error("PDF not found. Files in temp dir: %s", [f.name for f in files])
                 raise FileNotFoundError(
-                    f"PDF not generated at {pdf_path}. "
-                    f"Files in temp dir: {[f.name for f in files]}"
+                    f"PDF not generated at {pdf_path}. Files in temp dir: {[f.name for f in files]}"
                 )
             
-            # Convert first page of PDF to image
-            logger.info("Converting PDF to image...")
-            images = convert_from_path(
-                str(pdf_path),
-                first_page=1,
-                last_page=1,
-                dpi=150,  # Balance between quality and file size
-            )
-            
-            if not images:
-                raise ValueError("No images generated from PDF")
-            
-            # Save the first page
-            images[0].save(destination, "PNG")
-            logger.info("Headless screenshot saved to: %s", destination.name)
-            
+            logger.info("PDF found: %s (%d bytes)", pdf_path, pdf_path.stat().st_size)
+
+            # Rasterize first page using PyMuPDF
+            logger.info("Step 2: Rasterizing first page of PDF with PyMuPDF...")
+            doc = pymupdf.open(str(pdf_path))
+            try:
+                page = doc[0]
+                dpi = 150
+                zoom = dpi / 72.0
+                matrix = pymupdf.Matrix(zoom, zoom)
+                logger.info("Rendering at %d DPI (zoom: %.2f)", dpi, zoom)
+                
+                pix = page.get_pixmap(matrix=matrix, alpha=False)
+                pix.save(str(destination))
+                logger.info("Screenshot saved: %s (%d bytes)", destination, destination.stat().st_size)
+            finally:
+                doc.close()
+
+        logger.info("Headless conversion complete")
         return destination
 
     def _get_soffice_command(self) -> str:
         """Get the soffice/LibreOffice executable path."""
+        logger.info("Searching for LibreOffice executable...")
         candidates = ["soffice", "libreoffice"]
         if platform.system() == "Windows":
             candidates.extend([
@@ -147,78 +117,20 @@ class ScreenshotService:
                 r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
             ])
         
+        logger.info("Checking candidates: %s", candidates)
         for candidate in candidates:
             path = shutil.which(candidate)
             if path:
+                logger.info("Found LibreOffice at: %s", path)
                 return path
         
+        logger.error("LibreOffice executable not found")
         raise FileNotFoundError("LibreOffice (soffice) executable not found")
-
-    def _capture_with_viewer(self, pptx_path: Path, destination: Path) -> Path:
-        """Legacy GUI-based screenshot capture using viewer and mss."""
-        logger.info("Opening presentation: %s", pptx_path.name)
-        process = self._viewer.launch(pptx_path)
-        try:
-            logger.info("Waiting %.1f seconds for viewer to open...", self._config.viewer_launch_delay_seconds)
-            time.sleep(self._config.viewer_launch_delay_seconds)
-            
-            self._bring_viewer_to_front(pptx_path)
-            time.sleep(self._config.focus_delay_seconds)
-            
-            logger.info("Capturing screenshot...")
-            with mss.mss() as sct:
-                monitor = self._select_monitor(sct)
-                screenshot = sct.grab(monitor)
-                img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-                img.save(destination)
-            logger.info("Screenshot saved to: %s", destination.name)
-        finally:
-            self._viewer.close(process)
-        return destination
-
-    def _bring_viewer_to_front(self, pptx_path: Path) -> None:
-        """Platform-specific window activation."""
-        system = platform.system().lower()
-        try:
-            if "windows" in system:
-                # Windows: Use PowerShell to bring window to front
-                stem = pptx_path.stem
-                script = f"""$wshell = New-Object -ComObject wscript.shell; 
-                $wshell.AppActivate('{stem}')"""
-                subprocess.run(["powershell", "-Command", script], capture_output=True, timeout=2)
-            elif "darwin" in system:
-                # macOS: Use AppleScript or similar if needed
-                pass
-        except Exception as error:  # pylint: disable=broad-except
-            logger.debug("Could not activate viewer window: %s", error)
-
-    def _select_monitor(self, sct: "mss.mss") -> dict:  # type: ignore[name-defined]
-        """Select monitor to capture - prefer configured region or primary monitor."""
-        region = self._parse_region(self._config.capture_region)
-        if region:
-            left, top, width, height = region
-            return {"left": left, "top": top, "width": width, "height": height}
-        
-        # Use primary monitor (index 1 in mss, 0 is all monitors combined)
-        monitors = sct.monitors
-        if len(monitors) > 1:
-            return monitors[1]
-        return monitors[0]
-
-    @staticmethod
-    def _parse_region(region_str: Optional[str]) -> Optional[Tuple[int, int, int, int]]:
-        if not region_str:
-            return None
-        parts = region_str.split(",")
-        if len(parts) != 4:
-            return None
-        try:
-            return tuple(int(part.strip()) for part in parts)  # type: ignore[return-value]
-        except ValueError:
-            return None
 
     def _create_placeholder(self, destination: Path, pptx_path: Path) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Creating placeholder image: %s", destination)
+        
         image = Image.new("RGB", (1280, 720), color=(240, 240, 240))
         draw = ImageDraw.Draw(image)
         text = f"Placeholder screenshot\n{pptx_path.name}"
@@ -228,4 +140,5 @@ class ScreenshotService:
             font = None  # type: ignore[assignment]
         draw.multiline_text((40, 40), text, fill=(80, 80, 80), font=font, spacing=10)
         image.save(destination)
+        logger.info("Placeholder created: %s (%d bytes)", destination, destination.stat().st_size)
         return destination

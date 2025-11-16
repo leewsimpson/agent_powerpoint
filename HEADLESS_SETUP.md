@@ -4,17 +4,12 @@ The system now supports **server-side, headless PPTX screenshot generation** tha
 
 ## How It Works
 
-1. **Headless Mode (Preferred)**: Uses LibreOffice in headless mode to convert PPTX → PDF → PNG
-   - No GUI required
-   - Works on servers and CI/CD environments
-   - Requires LibreOffice and poppler-utils
+**Headless Mode**: Uses LibreOffice in headless mode to convert PPTX → PDF → PNG
+- No GUI required
+- Works on servers and CI/CD environments
+- Requires LibreOffice and PyMuPDF
 
-2. **GUI Mode (Fallback)**: Uses the original viewer + mss screenshot capture
-   - Requires a desktop environment
-   - Falls back automatically if headless mode is unavailable
-
-3. **Mock Mode**: Creates placeholder images
-   - Used when both methods fail or in development
+**Mock Mode**: Creates placeholder images when LibreOffice is unavailable or in development
 
 ## Installation
 
@@ -26,16 +21,7 @@ The system now supports **server-side, headless PPTX screenshot generation** tha
    ```
    Or download from https://www.libreoffice.org/download/download/
 
-2. **Install poppler** (for PDF to image conversion):
-   ```powershell
-   # Using Chocolatey
-   choco install poppler
-   
-   # Or using conda
-   conda install -c conda-forge poppler
-   ```
-
-3. **Install Python dependencies**:
+2. **Install Python dependencies** (includes PyMuPDF for PDF rasterization):
    ```bash
    uv sync
    ```
@@ -47,10 +33,7 @@ The system now supports **server-side, headless PPTX screenshot generation** tha
 sudo apt-get update
 sudo apt-get install -y libreoffice
 
-# Install poppler-utils for pdf2image
-sudo apt-get install -y poppler-utils
-
-# Install Python dependencies
+# Install Python dependencies (includes PyMuPDF)
 uv sync
 ```
 
@@ -60,53 +43,45 @@ uv sync
 # Install LibreOffice
 brew install --cask libreoffice
 
-# Install poppler
-brew install poppler
-
-# Install Python dependencies
+# Install Python dependencies (includes PyMuPDF)
 uv sync
 ```
 
 ## Verification
 
-The system automatically detects if headless rendering is available. Check the logs:
+The system will use headless rendering if LibreOffice is installed. Check the logs:
 
 ```
-INFO - Headless rendering available using: soffice
+INFO - Converting PPTX to screenshot using LibreOffice and PyMuPDF
 ```
 
-Or if unavailable:
+Or if unavailable (mock mode):
 
 ```
-INFO - Headless rendering not available (LibreOffice not found)
-INFO - Creating placeholder screenshot (all methods failed)
+INFO - Creating placeholder screenshot (mock mode)
 ```
 
 ## Configuration
 
-No additional configuration is needed. The system will:
-1. Try headless mode first
-2. Fall back to GUI mode if headless fails
-3. Use mock/placeholder if both fail
+No additional configuration is needed. The system uses headless mode when LibreOffice is available, or mock mode otherwise.
 
 ## Benefits
 
 - **Server-friendly**: No X11, display, or GUI required
 - **CI/CD compatible**: Works in Docker containers and GitHub Actions
-- **Reliable**: LibreOffice headless is more stable than GUI automation
+- **Simple**: Single method for screenshot generation
 - **Quality**: Renders at 150 DPI for good quality without huge file sizes
 
 ## Troubleshooting
 
 **Issue**: `FileNotFoundError: LibreOffice (soffice) executable not found`
-- **Solution**: Install LibreOffice (see installation instructions above)
+- **Solution**: Install LibreOffice (see installation instructions above). Ensure it's in your system PATH.
 
-**Issue**: `ImportError: cannot import name 'convert_from_path'`
-- **Solution**: Install pdf2image and poppler:
+**Issue**: `ImportError: No module named 'pymupdf'`
+- **Solution**: Reinstall dependencies:
   ```bash
-  uv pip install pdf2image
-  # Then install poppler using your OS package manager
+  uv sync
   ```
 
 **Issue**: Screenshots are still placeholders
-- **Solution**: Check logs for specific errors. Ensure both LibreOffice and poppler are installed and in PATH.
+- **Solution**: Check logs for specific errors. Ensure LibreOffice is installed and in PATH. Verify PyMuPDF is installed with `uv pip list | grep pymupdf`.

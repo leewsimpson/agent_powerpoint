@@ -12,7 +12,6 @@ from slidegen.scoring import ScoringService
 from slidegen.screenshot import ScreenshotService
 from slidegen.state import SlideGenStateMachine
 from slidegen.types import ImageInput, PipelineStage, SlideRequest
-from slidegen.viewer import ViewerLauncher
 
 
 def _create_sample_image(path: Path) -> None:
@@ -40,8 +39,7 @@ def test_state_machine_end_to_end(monkeypatch: Any, tmp_path: Path) -> None:
 
     artifact_manager = ArtifactManager(settings.io.default_output_dir)
     openai_client = OpenAIClient(settings.openai)
-    viewer = ViewerLauncher(settings.viewer)
-    screenshot_service = ScreenshotService(settings.screenshot, viewer, settings.openai.mock_mode)
+    screenshot_service = ScreenshotService(settings.screenshot, settings.openai.mock_mode)
     scoring_service = ScoringService(settings.score_weights, openai_client)
     state_machine = SlideGenStateMachine(
         settings=settings,
@@ -52,7 +50,8 @@ def test_state_machine_end_to_end(monkeypatch: Any, tmp_path: Path) -> None:
     )
 
     run_identifier = "custom-run"
-    metadata = state_machine.run(request, run_id=run_identifier)
+    run_paths = artifact_manager.create_run(run_identifier)
+    metadata = state_machine.run(request, run_paths)
 
     assert metadata.status == PipelineStage.COMPLETE
     assert metadata.run_id == run_identifier

@@ -12,13 +12,22 @@ dependencies = [
     "openai>=1.44.0",
     "pillow>=10.4.0",
     "pytest>=9.0.1",
-    "pdf2image>=1.17.0",
+    "pymupdf>=1.24.9",
 ]
+
+[project.scripts]
+slidegen = "slidegen.cli:run"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3.3",
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+packages = ["slidegen"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

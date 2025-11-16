@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,19 +9,21 @@ from typing import Dict, List
 
 from .artifacts import ArtifactManager
 from .config import Settings, load_settings
+from .logging_config import get_logger, setup_logging
 from .openai_client import OpenAIClient
 from .screenshot import ScreenshotService
 from .scoring import ScoringService
 from .state import SlideGenStateMachine
 from .types import ImageInput, SlideRequest
-from .viewer import ViewerLauncher
+
+logger = get_logger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Python SlideGen orchestrator")
     prompt_group = parser.add_mutually_exclusive_group(required=True)
-    prompt_group.add_argument("--prompt", help="Inline prompt text")
-    prompt_group.add_argument("--prompt-file", type=Path, help="Path to a text file containing the prompt")
+    prompt_group.add_argument("--prompt", help="Inline prompt text (direct description)")
+    prompt_group.add_argument("--prompt-file", type=Path, help="Path to a text or markdown file (.txt, .md) containing the prompt")
 
     parser.add_argument(
         "--image",
@@ -43,14 +44,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force real OpenAI usage if an API key is available",
     )
-    parser.add_argument("--log-level", default="INFO", help="Python logging level (default: INFO)")
     parser.add_argument("--run-id", help="Optional run identifier override")
 
     return parser.parse_args()
-
-
-def configure_logging(level: str) -> None:
-    logging.basicConfig(level=getattr(logging, level.upper(), logging.INFO), format="%(levelname)s - %(message)s")
 
 
 def load_prompt(args: argparse.Namespace) -> str:
@@ -88,11 +84,9 @@ def build_settings(args: argparse.Namespace) -> Settings:
     return load_settings(overrides=overrides)
 
 
-def create_state_machine(settings: Settings) -> SlideGenStateMachine:
-    artifact_manager = ArtifactManager(settings.io.default_output_dir)
+def create_state_machine(settings: Settings, artifact_manager: ArtifactManager) -> SlideGenStateMachine:
     openai_client = OpenAIClient(settings.openai)
-    viewer = ViewerLauncher(settings.viewer)
-    screenshot_service = ScreenshotService(settings.screenshot, viewer, settings.openai.mock_mode)
+    screenshot_service = ScreenshotService(settings.screenshot, settings.openai.mock_mode)
     scoring_service = ScoringService(settings.score_weights, openai_client)
     return SlideGenStateMachine(
         settings=settings,
@@ -105,20 +99,45 @@ def create_state_machine(settings: Settings) -> SlideGenStateMachine:
 
 def run() -> None:
     args = parse_args()
-    configure_logging(args.log_level)
-
+    
+    # Initial setup logging (console only) to show startup messages
+    setup_logging(log_file_path=None)
+    
     prompt = load_prompt(args)
     images = parse_image_specs(args.images)
     reference_image = args.reference_image.expanduser().resolve() if args.reference_image else None
 
     settings = build_settings(args)
-    state_machine = create_state_machine(settings)
+    
+    # Create run directory to get the log file path
+    artifact_manager = ArtifactManager(settings.io.default_output_dir)
+    run_paths = artifact_manager.create_run(run_id=args.run_id)
+    
+    # Now configure logging with the actual log file for this run
+    log_file = run_paths.logs_dir / "run.log"
+    setup_logging(log_file_path=log_file)
+    
+    logger.info("=" * 80)
+    logger.info("Starting new SlideGen run")
+    logger.info("Run ID: %s", run_paths.run_id)
+    logger.info("Log file: %s", log_file)
+    logger.info("=" * 80)
+    logger.info("Configuration:")
+    logger.info("  Mock mode: %s", settings.openai.mock_mode)
+    logger.info("  Model: %s", settings.openai.default_model)
+    logger.info("  Max retries: %s", settings.behavior.max_script_retries)
+    logger.info("  Max improvements: %s", settings.behavior.max_improvement_iterations)
+    logger.info("  Target score: %s", settings.behavior.target_score_threshold)
+    logger.info("-" * 80)
+    
+    state_machine = create_state_machine(settings, artifact_manager)
     request = SlideRequest(prompt=prompt, images=images, reference_image=reference_image)
     
     try:
-        metadata = state_machine.run(request, run_id=args.run_id)
+        metadata = state_machine.run(request, run_paths=run_paths)
     except Exception as error:
-        print(f"\n[SlideGen] X CRITICAL ERROR: {error}", flush=True)
+        logger.error("CRITICAL ERROR: %s", error, exc_info=True)
+        logger.progress("X CRITICAL ERROR: %s", error)  # type: ignore[attr-defined]
         raise SystemExit(1) from error
 
     # Copy best PPTX to workspace root with timestamp
@@ -130,8 +149,9 @@ def run() -> None:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             workspace_pptx = settings.io.workspace_dir / f"slide_{timestamp}.pptx"
             shutil.copy2(best_pptx, workspace_pptx)
-            print(f"\n[SlideGen] ✓ Best slide saved to: {workspace_pptx.name}", flush=True)
-            print(f"[SlideGen]   Full path: {workspace_pptx}", flush=True)
+            logger.info("Best slide copied to workspace: %s", workspace_pptx)
+            logger.progress("✓ Best slide saved to: %s", workspace_pptx.name)  # type: ignore[attr-defined]
+            logger.progress("  Full path: %s", workspace_pptx)  # type: ignore[attr-defined]
 
     summary: Dict[str, object] = {
         "run_id": metadata.run_id,
@@ -141,19 +161,23 @@ def run() -> None:
         "output_dir": str(settings.io.default_output_dir / metadata.run_id),
         "workspace_pptx": str(workspace_pptx) if workspace_pptx else None,
     }
-    print(f"\n{json.dumps(summary, indent=2)}")
+    
+    logger.info("Run summary: %s", json.dumps(summary, indent=2))
+    logger.progress("\n%s", json.dumps(summary, indent=2))  # type: ignore[attr-defined]
     
     # Exit with error code if the workflow failed
     if metadata.status.value == "failed":
-        print("\n[SlideGen] X Workflow failed", flush=True)
+        logger.error("Workflow failed")
+        logger.progress("X Workflow failed")  # type: ignore[attr-defined]
         
         # Show the last error details
         if metadata.iterations:
             last_iteration = metadata.iterations[-1]
             if last_iteration.execution and last_iteration.execution.stderr:
-                print("\n[SlideGen] Error details:", flush=True)
-                print(last_iteration.execution.stderr, flush=True)
-                print(f"\n[SlideGen] Full logs in: {summary['output_dir']}/logs/", flush=True)
+                logger.error("Last error: %s", last_iteration.execution.stderr)
+                logger.progress("Error details:")  # type: ignore[attr-defined]
+                logger.progress("%s", last_iteration.execution.stderr)  # type: ignore[attr-defined]
+                logger.progress("Full logs in: %s/logs/", summary['output_dir'])  # type: ignore[attr-defined]
         
         raise SystemExit(1)
 

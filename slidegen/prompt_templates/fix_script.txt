@@ -1,21 +1,129 @@
 You fix a previous python-pptx script so it runs successfully.
 
-Prompt:
+<Original Prompt>
 {prompt}
+</<Original Prompt>
 
-Images:
+<Original Assets (user-provided images)>
 {image_table}
+</Original Assets (user-provided images)>
 
-Failing Script:
+<Failing Script>
 {failing_script}
+</Failing Script>
 
-Error Log:
+<Error Log>
 {error_log}
+</Error Log>
 
-CRITICAL Requirements:
-- The script MUST parse command-line arguments --output and --images
-- The main function MUST be: def main(output_path, image_map=None)
-- The if __name__ == "__main__" block MUST parse arguments and call main() with them
-- DO NOT hardcode filenames like "test_slide.pptx" or "hello_world.pptx"
+<Requirements>
+- Implement a main(output_path, image_map=None) function that creates a single 16:9 slide.
+- Use python-pptx only.
+- Use the supplied image_map names when placing pictures.
+- The script needs to match the slide instructions completely.
+- CRITICAL: The script MUST parse command-line arguments --output and --images.
+- CRITICAL: Include complete argument parsing code as shown in the example.
+- Return only executable Python source code. No explanations.
+</Requirements>
 
-Return an updated python script that keeps the contract and addresses the failure.
+<Example structure (you must follow this pattern)>
+- Import argparse, json, pathlib.Path, and pptx modules
+- Define main(output_path, image_map=None) that creates and saves the presentation
+- In if __name__ == "__main__" block: parse --output and --images arguments, load image_map from JSON file if provided, call main()
+</Example structure (you must follow this pattern)>
+
+<python-pptx documentation reminder>
+- Presentations
+    - Presentation function
+    - Presentation objects
+    - CoreProperties objects
+- Slides
+    - Slides objects
+    - Slide objects
+    - SlideLayouts objects
+    - SlideLayout objects
+    - SlideMasters objects
+    - SlideMaster objects
+    - SlidePlaceholders objects
+    - NotesSlide objects
+- Shapes
+    - SlideShapes objects
+    - GroupShapes objects
+    - Shape objects in general
+    - Shape objects (AutoShapes)
+    - Connector objects
+    - FreeformBuilder objects
+    - Picture objects
+    - GraphicFrame objects
+    - GroupShape objects
+- Placeholders
+    - MasterPlaceholder objects
+    - LayoutPlaceholder objects
+    - ChartPlaceholder objects
+    - PicturePlaceholder objects
+    - TablePlaceholder objects
+    - PlaceholderGraphicFrame objects
+    - PlaceholderPicture objects
+    - _PlaceholderFormat objects
+- Table-related objects
+    - Table objects
+    - _Column objects
+    - _Row objects
+    - _Cell objects
+- ChartData objects
+- Charts
+    - Chart objects
+    - Legend objects
+    - Axis objects
+    - MajorGridlines objects
+    - TickLabels objects
+    - _BasePlot objects
+    - DataLabels objects
+    - Series objects
+    - Point objects
+- Text-related objects
+    - TextFrame objects
+    - Font objects
+    - _Paragraph objects
+    - _Run objects
+- Click Action-related Objects
+    - ActionSetting objects
+    - Hyperlink objects
+- DrawingML objects
+    - ChartFormat objects
+    - FillFormat objects
+    - LineFormat objects
+    - ColorFormat objects
+    - RGBColor objects
+    - ShadowFormat objects
+- Image
+    - Image objects
+- Exceptions
+- util Module
+- Enumerations
+    - MSO_AUTO_SHAPE_TYPE
+    - MSO_AUTO_SIZE
+    - MSO_COLOR_TYPE
+    - MSO_CONNECTOR_TYPE
+    - MSO_FILL_TYPE
+    - MSO_LANGUAGE_ID
+    - MSO_LINE_DASH_STYLE
+    - MSO_PATTERN_TYPE
+    - MSO_SHAPE_TYPE
+    - MSO_TEXT_UNDERLINE_TYPE
+    - MSO_THEME_COLOR_INDEX
+    - MSO_VERTICAL_ANCHOR
+    - PP_ACTION_TYPE
+    - PP_MEDIA_TYPE
+    - PP_PARAGRAPH_ALIGNMENT
+    - PP_PLACEHOLDER_TYPE
+    - XL_AXIS_CROSSES
+    - XL_CATEGORY_TYPE
+    - XL_CHART_TYPE
+    - XL_DATA_LABEL_POSITION
+    - XL_LEGEND_POSITION
+    - XL_MARKER_STYLE
+    - XL_TICK_LABEL_POSITION
+    - XL_TICK_MARK
+    - Excel Number Formats
+</python-pptx documentation reminder>

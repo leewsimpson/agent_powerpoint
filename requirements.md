@@ -137,19 +137,18 @@ The control flow follows the original diagram, with explicit states for:
 
 #### 2.1.7 Screenshot and Image Capture Layer
 
-* Uses **`pyautogui`** to take a screenshot of the generated slide.
+* Uses **headless LibreOffice + PyMuPDF** as the primary screenshot method (server-friendly, no GUI required).
+* Falls back to **`mss`** for GUI-based capture if headless mode unavailable.
 * Responsibilities:
 
-  * Coordinate with a platform specific viewer to open the PPTX.
-  * Wait for the slide to be visible.
-  * Focus the viewer window.
-  * Capture either the full screen or a configured region containing the slide.
+  * **Headless mode**: Convert PPTX → PDF → PNG using LibreOffice headless and PyMuPDF at 150 DPI.
+  * **GUI mode**: Coordinate with a platform specific viewer to open the PPTX, focus the window, and capture using `mss`.
   * Save screenshot as `slide_vX.png` under `runs/<run_id>/outputs/`.
-  * Optionally close or minimize the viewer window afterwards.
+  * Create placeholder images if both methods fail.
 
 #### 2.1.8 Viewer Abstraction
 
-* Provides a small OS aware abstraction around PPTX viewing.
+* Provides a small OS aware abstraction around PPTX viewing (used only for GUI-based screenshot fallback).
 * Uses `.env` values, for example:
 
   * `PPTX_VIEWER_COMMAND_WINDOWS` on Windows.
@@ -158,6 +157,7 @@ The control flow follows the original diagram, with explicit states for:
 
   * Launch the viewer with parameters that open the PPTX on the first slide, ideally in slideshow or full screen mode.
   * Provide hints to the screenshot layer (window title, expected delays).
+* **Note**: Not required when using headless screenshot mode.
 
 #### 2.1.9 Artifact Manager
 
@@ -497,10 +497,12 @@ Slide scoring is used both to drive the improvement loop and to select the best 
 
 2. **Portability**
 
-   * Must work on **both Windows and macOS**:
+   * Must work on **Windows, macOS, and Linux**:
 
-     * Use OS specific viewer commands from `.env`.
-     * `pyautogui` configuration (hotkeys, window titles, screen regions) must be configurable per OS.
+     * Headless mode works consistently across all platforms.
+     * GUI fallback uses OS specific viewer commands from `.env`.
+     * `mss` configuration (window titles, screen regions) must be configurable per OS.
+   * Headless mode provides better portability for server environments and CI/CD.
    * When OS detection is ambiguous, a clear error or configuration hint should be provided.
 
 3. **Reliability**
