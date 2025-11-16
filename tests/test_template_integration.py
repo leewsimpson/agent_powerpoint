@@ -11,7 +11,7 @@ from slidegen.types import ImageInput, ScoreBreakdown
 
 def test_end_to_end_template_composition():
     """Test complete workflow using template composition."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     
     images = [
@@ -88,7 +88,7 @@ def test_score_slide_template_independent():
 
 def test_template_composition_with_no_images():
     """Test template composition works correctly with empty image lists."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     
     result = client.generate_initial_script("Simple slide with no images", [])
@@ -100,7 +100,7 @@ def test_template_composition_with_no_images():
 
 def test_template_composition_with_many_images():
     """Test template composition handles multiple images correctly."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     
     images = [
@@ -120,7 +120,7 @@ def test_template_composition_with_many_images():
 
 def test_prompt_payload_deterministic():
     """Test that prompt payloads are deterministic for same inputs."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     image = ImageInput(name="test", path=Path("test.png"), description="Test image")
     
@@ -137,7 +137,7 @@ def test_prompt_payload_deterministic():
 
 def test_template_composition_preserves_context():
     """Test that template composition doesn't lose custom context."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     image = ImageInput(name="test", path=Path("test.png"), description="Test image")
     
@@ -155,7 +155,7 @@ def test_template_composition_preserves_context():
 
 def test_iteration_tracking_in_improvements():
     """Test that iteration tracking works correctly in improvement prompts."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     image = ImageInput(name="test", path=Path("test.png"), description="Test")
     
@@ -173,7 +173,7 @@ def test_iteration_tracking_in_improvements():
 
 def test_error_context_preserved_in_fix():
     """Test that error context is fully preserved in fix prompts."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     image = ImageInput(name="test", path=Path("test.png"), description="Test")
     
@@ -193,7 +193,7 @@ AttributeError: 'NoneType' object has no attribute 'text_frame'
 
 def test_score_feedback_formatting():
     """Test that score feedback is correctly formatted in improvement prompts."""
-    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True)
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
     client = OpenAIClient(config)
     image = ImageInput(name="test", path=Path("test.png"), description="Test")
     
@@ -202,7 +202,8 @@ def test_score_feedback_formatting():
         content_accuracy=90.25,
         layout_match=78.75,
         visual_quality=82.0,
-        aggregate=84.125
+        aggregate=84.125,
+        issues=["Need better alignment", "Colors don't match brand guidelines"],
     )
     
     result = client.improve_script("Test", [image], "# code", score, 1)
@@ -213,3 +214,60 @@ def test_score_feedback_formatting():
     assert "Layout Match=78.75" in result.prompt_payload
     assert "Visual Quality=82.0" in result.prompt_payload
     assert "Aggregate=84.125" in result.prompt_payload
+    
+    # Verify issues are included in the prompt
+    assert "Issues to address:" in result.prompt_payload
+    assert "- Need better alignment" in result.prompt_payload
+    assert "- Colors don't match brand guidelines" in result.prompt_payload
+
+
+def test_score_slide_mock_mode():
+    """Test that score_slide works in mock mode and includes issues."""
+    config = OpenAIConfig(api_key=None, default_model="gpt-test", vision_model="gpt-test", mock_mode=True, reasoning_effort="medium", use_azure=False, azure_endpoint=None, azure_deployment=None, azure_api_version=None)
+    client = OpenAIClient(config)
+    
+    images = [
+        ImageInput(name="graph", path=Path("graph.png"), description="Performance graph"),
+    ]
+    
+    # Score a slide in mock mode
+    score = client.score_slide(
+        prompt="Test slide with data visualization",
+        images=images,
+        screenshot_path=Path("screenshot.png"),
+        reference_image=None,
+    )
+    
+    # Verify score structure
+    assert isinstance(score, ScoreBreakdown)
+    assert 0 <= score.completeness <= 100
+    assert 0 <= score.content_accuracy <= 100
+    assert 0 <= score.layout_match <= 100
+    assert 0 <= score.visual_quality <= 100
+    assert 0 <= score.aggregate <= 100
+    
+    # Verify issues are generated
+    assert isinstance(score.issues, list)
+    # Mock mode should generate issues if scores are below thresholds
+
+
+def test_score_slide_to_dict_includes_issues():
+    """Test that ScoreBreakdown.to_dict includes issues."""
+    score = ScoreBreakdown(
+        completeness=75.0,
+        content_accuracy=80.0,
+        layout_match=70.0,
+        visual_quality=72.0,
+        aggregate=74.25,
+        issues=["Issue 1", "Issue 2"],
+    )
+    
+    score_dict = score.to_dict()
+    
+    assert "completeness" in score_dict
+    assert "content_accuracy" in score_dict
+    assert "layout_match" in score_dict
+    assert "visual_quality" in score_dict
+    assert "aggregate" in score_dict
+    assert "issues" in score_dict
+    assert score_dict["issues"] == ["Issue 1", "Issue 2"]

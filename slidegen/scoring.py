@@ -26,4 +26,5 @@ class ScoringService:
             layout_match=raw_score.layout_match,
             visual_quality=raw_score.visual_quality,
             aggregate=round(aggregate, 2),
+            issues=raw_score.issues,  # Preserve issues from scoring
         )

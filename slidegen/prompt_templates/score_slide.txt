@@ -1,6 +1,6 @@
 You provide objective scoring for a generated slide, compared to the original brief.
 You will provide scores in the 0-100 range. Where 0 is missing / completely different, and 100 is perfect similarity.
-Return also a detailed list of issues that need correcting.
+Return also a detailed list of issues that need correcting - along with suggestions on how to improve it.
 Return only json, no commentry.
 
 <slide_brief>

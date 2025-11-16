@@ -143,7 +143,7 @@ class OpenAIClient:
     ) -> ScoreBreakdown:
         """Score a slide based on prompt, assets, and optionally a reference image.
         
-        Currently uses deterministic pseudo-scoring. Can be extended to use Vision API.
+        Uses Vision API to analyze the generated slide screenshot against the brief.
         """
 
         image_list = list(images)
@@ -155,16 +155,39 @@ class OpenAIClient:
             reference_image=str(reference_image) if reference_image else "None",
         )
 
-        # TODO: When ready to use real API, uncomment below and remove mock scoring
-        # if not self._config.mock_mode and self._client:
-        #     image_paths = [img.path for img in image_list]
-        #     if screenshot_path and screenshot_path.exists():
-        #         image_paths.append(screenshot_path)
-        #     if reference_image and reference_image.exists():
-        #         image_paths.append(reference_image)
-        #     return self._call_openai_for_scoring(prompt_payload, image_paths)
+        log_ai_request(logger=logger, operation="SCORE SLIDE", prompt=prompt_payload, reference_image=reference_image, model=self._config.default_model)
 
-        logger.info("Scoring slide (mock mode)")
+        if self._config.mock_mode or not self._client:
+            logger.info("Scoring slide (mock mode)")
+            return self._mock_score_slide(prompt, prompt_payload, image_list, screenshot_path, reference_image)
+        
+        # Validate screenshot exists for API scoring
+        if not screenshot_path:
+            raise ValueError("Screenshot path is required for slide scoring")
+        
+        if not screenshot_path.exists():
+            raise FileNotFoundError(f"Screenshot file not found: {screenshot_path}")
+        
+        # Call Vision API with all relevant images
+        score_data = self._call_openai_for_scoring(
+            prompt_payload=prompt_payload,
+            screenshot_path=screenshot_path,
+            reference_image=reference_image,
+            asset_images=[img.path for img in image_list],
+        )
+        
+        log_ai_response(logger, "SCORE SLIDE", f"Received scores: {score_data.to_dict()}", request_id="scoring")
+        return score_data
+
+    def _mock_score_slide(
+        self,
+        prompt: str,
+        prompt_payload: str,
+        image_list: list[ImageInput],
+        screenshot_path: Optional[Path],
+        reference_image: Optional[Path],
+    ) -> ScoreBreakdown:
+        """Mock scoring implementation for testing without API calls."""
         logger.debug("Score prompt payload: %s", prompt_payload[:200] + "..." if len(prompt_payload) > 200 else prompt_payload)
 
         prompt_weight = min(len(prompt) / 500.0, 1.0)
@@ -185,12 +208,22 @@ class OpenAIClient:
 
         aggregate = (completeness + content_accuracy + layout_match + visual_quality) / 4
 
+        # Generate mock issues
+        mock_issues = []
+        if completeness < 80:
+            mock_issues.append("Consider adding more content to fully address all points in the brief")
+        if layout_match < 85:
+            mock_issues.append("Layout could be improved to better match the reference design")
+        if visual_quality < 85:
+            mock_issues.append("Visual elements could be enhanced for better presentation quality")
+
         breakdown = ScoreBreakdown(
             completeness=round(completeness, 2),
             content_accuracy=round(content_accuracy, 2),
             layout_match=round(layout_match, 2),
             visual_quality=round(visual_quality, 2),
             aggregate=round(aggregate, 2),
+            issues=mock_issues,
         )
         
         logger.info("Score breakdown: %s", breakdown.to_dict())
@@ -328,6 +361,140 @@ class OpenAIClient:
             return script, request_id
         except Exception as error:
             logger.error("OpenAI API call failed: %s", error, exc_info=True)
+            raise
+
+    def _call_openai_for_scoring(
+        self,
+        prompt_payload: str,
+        screenshot_path: Path,
+        reference_image: Optional[Path],
+        asset_images: list[Path],
+    ) -> ScoreBreakdown:
+        """Call OpenAI Vision API to score a slide.
+        
+        Args:
+            prompt_payload: The scoring prompt with criteria
+            screenshot_path: Screenshot of the generated slide (required)
+            reference_image: Optional reference image to compare against
+            asset_images: List of user-provided image assets
+            
+        Returns:
+            ScoreBreakdown with scores and improvement issues
+            
+        Raises:
+            ValueError: If OpenAI client not initialized, screenshot missing, or response invalid
+            FileNotFoundError: If screenshot file doesn't exist
+            Exception: If API call fails
+        """
+        if not self._client:
+            raise ValueError("OpenAI client not initialized")
+        
+        if not screenshot_path.exists():
+            raise FileNotFoundError(f"Screenshot file not found: {screenshot_path}")
+        
+        logger.info("Calling OpenAI Vision API for scoring with model: %s", self._config.default_model)
+        
+        try:
+            # Build message content with text and all relevant images
+            content: list[dict[str, object]] = [{"type": "text", "text": prompt_payload}]
+            
+            # Add screenshot (required - the main subject to score)
+            logger.debug("Encoding slide screenshot: %s", screenshot_path)
+            base64_image = self._encode_image(screenshot_path)
+            mime_type = self._get_image_mime_type(screenshot_path)
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{base64_image}",
+                    "detail": "high"
+                }
+            })
+            content.append({
+                "type": "text",
+                "text": "^ This is the generated slide to evaluate."
+            })
+            
+            # Add reference image if provided
+            if reference_image and reference_image.exists():
+                logger.debug("Encoding reference image: %s", reference_image)
+                base64_image = self._encode_image(reference_image)
+                mime_type = self._get_image_mime_type(reference_image)
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{base64_image}",
+                        "detail": "high"
+                    }
+                })
+                content.append({
+                    "type": "text",
+                    "text": "^ This is the reference image to compare layout and style against."
+                })
+            
+            # Build API parameters for JSON response
+            model_name = self._config.azure_deployment if self._config.use_azure and self._config.azure_deployment else self._config.default_model
+            
+            api_params: dict[str, object] = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": "You are an expert presentation evaluator. Analyze slides objectively and return only valid JSON."},
+                    {"role": "user", "content": content}
+                ],
+                "response_format": {"type": "json_object"},
+            }
+            
+            # Configure parameters based on model type
+            is_reasoning = self._is_reasoning_model(self._config.default_model) or self._is_reasoning_model(model_name)
+            
+            if is_reasoning:
+                api_params["reasoning_effort"] = self._config.reasoning_effort
+                logger.info("Using reasoning model for scoring with effort: %s", self._config.reasoning_effort)
+            else:
+                api_params["temperature"] = 0.3
+            
+            response = self._client.chat.completions.create(**api_params)  # type: ignore[arg-type]
+            
+            if not response.choices:
+                raise ValueError("No choices in API response")
+            
+            response_text = response.choices[0].message.content or ""
+            request_id = response.id
+            
+            logger.info("Scoring API call successful. Request ID: %s", request_id)
+            
+            # Parse JSON response
+            import json
+            score_json = json.loads(response_text)
+            
+            # Extract scores and issues
+            completeness = float(score_json.get("completeness", 0))
+            content_accuracy = float(score_json.get("content_accuracy", 0))
+            layout_match = float(score_json.get("layout_match", 0))
+            visual_quality = float(score_json.get("visual_quality", 0))
+            issues = score_json.get("issues", [])
+            
+            # Ensure issues is a list of strings
+            if not isinstance(issues, list):
+                issues = [str(issues)]
+            else:
+                issues = [str(issue) for issue in issues]
+            
+            aggregate = (completeness + content_accuracy + layout_match + visual_quality) / 4
+            
+            return ScoreBreakdown(
+                completeness=round(completeness, 2),
+                content_accuracy=round(content_accuracy, 2),
+                layout_match=round(layout_match, 2),
+                visual_quality=round(visual_quality, 2),
+                aggregate=round(aggregate, 2),
+                issues=issues,
+            )
+            
+        except json.JSONDecodeError as error:
+            logger.error("Failed to parse scoring JSON response: %s", error)
+            raise ValueError(f"Invalid JSON response from scoring API: {error}") from error
+        except Exception as error:
+            logger.error("Scoring API call failed: %s", error, exc_info=True)
             raise
     
     @staticmethod
@@ -568,10 +735,17 @@ class OpenAIClient:
     def _format_score(score: Optional[ScoreBreakdown]) -> str:
         if not score:
             return "No prior score available."
-        return (
+        
+        score_text = (
             f"Completeness={score.completeness}, "
             f"Content Accuracy={score.content_accuracy}, "
             f"Layout Match={score.layout_match}, "
             f"Visual Quality={score.visual_quality}, "
             f"Aggregate={score.aggregate}"
         )
+        
+        if score.issues:
+            issues_text = "\n\nIssues to address:\n" + "\n".join(f"- {issue}" for issue in score.issues)
+            return score_text + issues_text
+        
+        return score_text

@@ -70,14 +70,16 @@ class ScoreBreakdown:
     layout_match: float
     visual_quality: float
     aggregate: float
+    issues: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, object]:
         return {
             "completeness": self.completeness,
             "content_accuracy": self.content_accuracy,
             "layout_match": self.layout_match,
             "visual_quality": self.visual_quality,
             "aggregate": self.aggregate,
+            "issues": self.issues,
         }
 
 
