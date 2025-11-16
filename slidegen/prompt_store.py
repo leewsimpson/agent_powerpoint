@@ -24,7 +24,23 @@ class PromptStore:
 
     def render(self, name: str, **context: object) -> str:
         template = self.get(name)
+        # Auto-inject shared templates if referenced
+        if "{shared_" in template:
+            context = self._inject_shared_templates(context)
         return template.format(**context)
+    
+    def _inject_shared_templates(self, context: dict[str, object]) -> dict[str, object]:
+        """Automatically inject shared template fragments."""
+        shared_names = ["shared_requirements", "shared_structure", "shared_pptx_api"]
+        result = dict(context)
+        for shared_name in shared_names:
+            if shared_name not in result:
+                try:
+                    result[shared_name] = self.get(shared_name)
+                except FileNotFoundError:
+                    # Shared template doesn't exist, skip it
+                    pass
+        return result
 
     @staticmethod
     def _normalize_name(name: str) -> str:

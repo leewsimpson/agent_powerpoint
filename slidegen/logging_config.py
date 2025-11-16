@@ -85,10 +85,17 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def log_ai_request(logger: logging.Logger, operation: str, prompt: str, model: Optional[str] = None) -> None:
+def log_ai_request(logger: logging.Logger, operation: str, prompt: str,  reference_image: Optional[Path] = None, previous_image: Optional[Path] = None, model: Optional[str] = None) -> None:
     """Log an AI request with clear formatting."""
     logger.info("=" * 80)
     logger.info("AI REQUEST: %s", operation)
+
+    if reference_image:
+        logger.info("Reference Image: %s", reference_image)
+    
+    if previous_image:
+        logger.info("Previous Image: %s", previous_image)
+
     if model:
         logger.info("Model: %s", model)
     logger.info("-" * 80)

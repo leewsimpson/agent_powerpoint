@@ -57,7 +57,6 @@ class SlideGenStateMachine:
             self._artifact_manager,
             run_paths,
             self._settings.behavior,
-            self._settings.runtime,
         )
         image_map = {image.name: image.path for image in stored_images}
         script_cache: Dict[str, str] = {}
@@ -67,7 +66,7 @@ class SlideGenStateMachine:
         logger.progress("Generating initial script...")  # type: ignore[attr-defined]
         logger.info("Stage: INITIAL_GENERATION")
 
-        generation = self._openai.generate_initial_script(request.prompt, stored_images)
+        generation = self._openai.generate_initial_script(prompt=request.prompt, image_assets=stored_images, reference_image=request.reference_image)
         current_version = script_manager.create_version(
             content=generation.script,
             origin=ScriptOrigin.INITIAL,
@@ -151,10 +150,11 @@ class SlideGenStateMachine:
             
             improvement = self._openai.improve_script(
                 prompt=request.prompt,
-                images=stored_images,
+                image_assets=stored_images,
                 previous_script=script_cache[current_version.version_id],
                 score_feedback=metadata.best_score,
                 iteration_index=iteration_index,
+                reference_image=request.reference_image,
                 previous_screenshot=previous_screenshot,
             )
             improved_version = script_manager.create_version(
@@ -242,7 +242,7 @@ class SlideGenStateMachine:
             logger.info("Fix attempt %d/%d", attempt, attempts)
             fix_result = self._openai.fix_script(
                 prompt=request.prompt,
-                images=stored_images,
+                image_assets=stored_images,
                 failing_script=last_script_content,
                 error_log=execution.stderr if execution else "",
             )

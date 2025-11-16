@@ -14,6 +14,7 @@ class OpenAIConfig:
     default_model: str
     vision_model: str
     mock_mode: bool
+    reasoning_effort: str  # "low", "medium", "high", or "minimal"
 
 
 @dataclass(frozen=True)
@@ -29,22 +30,6 @@ class IOConfig:
     default_output_dir: Path
     workspace_dir: Path
 
-
-@dataclass(frozen=True)
-class ViewerConfig:
-    viewer_command_windows: Optional[str]
-    viewer_command_macos: Optional[str]
-
-
-@dataclass(frozen=True)
-class ScreenshotConfig:
-    viewer_launch_delay_seconds: float
-    capture_region: Optional[str]
-    window_title_hint: Optional[str]
-    window_search_timeout_seconds: float
-    focus_delay_seconds: float
-
-
 @dataclass(frozen=True)
 class ScoreWeights:
     completeness: float
@@ -58,21 +43,11 @@ class ScoreWeights:
 
 
 @dataclass(frozen=True)
-class RuntimeConfig:
-    use_uv: bool
-    uv_executable: str
-    allow_python_fallback: bool
-
-
-@dataclass(frozen=True)
 class Settings:
     openai: OpenAIConfig
     behavior: BehaviorConfig
     io: IOConfig
-    viewer: ViewerConfig
-    screenshot: ScreenshotConfig
     score_weights: ScoreWeights
-    runtime: RuntimeConfig
 
 
 def _load_environment(env_path: Optional[Path]) -> Dict[str, str]:
@@ -113,6 +88,7 @@ def load_settings(
         default_model=env_data.get("OPENAI_DEFAULT_MODEL", "gpt-4o-mini"),
         vision_model=env_data.get("OPENAI_VISION_MODEL", "gpt-4o-mini"),
         mock_mode=mock_mode,
+        reasoning_effort=env_data.get("OPENAI_REASONING_EFFORT", "medium"),
     )
 
     behavior = BehaviorConfig(
@@ -127,19 +103,6 @@ def load_settings(
         workspace_dir=workspace_dir,
     )
 
-    viewer = ViewerConfig(
-        viewer_command_windows=env_data.get("PPTX_VIEWER_COMMAND_WINDOWS"),
-        viewer_command_macos=env_data.get("PPTX_VIEWER_COMMAND_MACOS"),
-    )
-
-    screenshot = ScreenshotConfig(
-        viewer_launch_delay_seconds=float(env_data.get("VIEWER_LAUNCH_DELAY_SECONDS", "2.0")),
-        capture_region=env_data.get("SCREENSHOT_CAPTURE_REGION"),
-        window_title_hint=env_data.get("SCREENSHOT_WINDOW_TITLE_HINT"),
-        window_search_timeout_seconds=float(env_data.get("SCREENSHOT_WINDOW_SEARCH_TIMEOUT_SECONDS", "10.0")),
-        focus_delay_seconds=float(env_data.get("SCREENSHOT_FOCUS_DELAY_SECONDS", "0.6")),
-    )
-
     score_weights = ScoreWeights(
         completeness=float(env_data.get("SCORE_WEIGHT_COMPLETENESS", "0.3")),
         content_accuracy=float(env_data.get("SCORE_WEIGHT_CONTENT_ACCURACY", "0.3")),
@@ -150,21 +113,11 @@ def load_settings(
     total_weight = score_weights.total
     if not 0.99 <= total_weight <= 1.01:  # allow minor float drift
         raise ValueError("Score weights must sum to 1.0")
-
-    runtime = RuntimeConfig(
-        use_uv=_to_bool(env_data.get("USE_UV"), default=True),
-        uv_executable=env_data.get("UV_EXECUTABLE", "uv"),
-        allow_python_fallback=_to_bool(env_data.get("UV_ALLOW_PYTHON_FALLBACK"), default=True),
-    )
-
     default_output_dir.mkdir(parents=True, exist_ok=True)
 
     return Settings(
         openai=openai,
         behavior=behavior,
         io=io_config,
-        viewer=viewer,
-        screenshot=screenshot,
-        score_weights=score_weights,
-        runtime=runtime,
+        score_weights=score_weights
     )

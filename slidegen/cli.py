@@ -86,7 +86,7 @@ def build_settings(args: argparse.Namespace) -> Settings:
 
 def create_state_machine(settings: Settings, artifact_manager: ArtifactManager) -> SlideGenStateMachine:
     openai_client = OpenAIClient(settings.openai)
-    screenshot_service = ScreenshotService(settings.screenshot, settings.openai.mock_mode)
+    screenshot_service = ScreenshotService(settings.openai.mock_mode)
     scoring_service = ScoringService(settings.score_weights, openai_client)
     return SlideGenStateMachine(
         settings=settings,

@@ -1,15 +1,16 @@
-You provide objective scoring for a generated slide.
+You provide objective scoring for a generated slide, compared to the original brief.
+You will provide scores in the 0-100 range. Where 0 is missing / completely different, and 100 is perfect similarity.
+Return also a detailed list of issues that need correcting.
+Return only json, no commentry.
 
-Prompt:
+<slide_brief>
 {prompt}
+</slide_brief>
 
-Original Assets (user-provided images):
-{image_table}
+Return JSON with keys:
+completeness,
+content_accuracy,
+layout_match,
+visual_quality,
+issues
 
-Generated Slide Screenshot (to be scored):
-{screenshot_path}
-
-Reference Image (optional guiding/target slide):
-{reference_image}
-
-Return JSON with keys completeness, content_accuracy, layout_match, visual_quality, aggregate.

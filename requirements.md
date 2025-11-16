@@ -7,10 +7,11 @@ Python SlideGen is a Python based workflow that takes a **natural language slide
 The system:
 
 1. Accepts a high level prompt describing the desired slide (content, structure, style, branding).
-2. Accepts zero or more **input images**, each with:
+2. Optionally accepts a **reference layout image** that illustrates the desired overall visual design and structure.
+3. Accepts zero or more **asset images**, each with:
    * a unique name, and
    * a short description explaining what the image is and how it should be used.
-3. Uses an LLM to generate a Python script that uses `python-pptx` to build the slide and embed the requested images.
+4. Uses an LLM to generate a Python script that uses `python-pptx` to build the slide and embed the requested asset images.
 4. Executes the generated script in a controlled environment to produce a PPTX.
 5. Uses `pyautogui` to capture a screenshot of the slide for visual comparison.
 6. If the script fails, an LLM based fix loop repairs the code up to a configurable retry limit.
@@ -39,8 +40,8 @@ The control flow follows the original diagram, with explicit states for:
 * Accepts:
 
   * Slide prompt (required).
-  * Zero or more input images with associated names and descriptions.
   * Optional reference layout image (ideal overall look and feel).
+  * Zero or more asset images with associated names and descriptions.
   * Configuration overrides such as retry counts and output directories.
 * Triggers and coordinates all other components and stages.
 
@@ -79,9 +80,9 @@ The control flow follows the original diagram, with explicit states for:
   * Handle authentication from `.env` / environment.
   * Provide high level functions:
 
-    * Generate initial script from prompt and image list.
+    * Generate initial script from prompt, optional reference layout image, and asset image list.
     * Fix script using error logs.
-    * Improve script using screenshots, reference layout, prompt, and scoring guidance.
+    * Improve script using screenshots, reference layout image, prompt, and scoring guidance.
     * Compute slide scores (single scalar) from multi component evaluation.
   * Load system/user prompts from external template files (no inline prompts in code) so prompt content can be audited and updated without code changes.
   * Centralize:
@@ -111,7 +112,7 @@ The control flow follows the original diagram, with explicit states for:
 * Executes generated scripts in an isolated subprocess within the **uv** managed environment.
 * Responsibilities:
 
-  * Invoke scripts with a standard interface (for example `--output` for PPTX path and a configuration file or env var for image mapping).
+  * Invoke scripts with a standard interface (for example `--output` for PPTX path and a configuration file).
   * Enforce execution timeout using configuration.
   * Capture exit code, stdout, and stderr to log files.
 * Safety constraints:
@@ -129,10 +130,10 @@ The control flow follows the original diagram, with explicit states for:
   * Use `python-pptx` APIs to:
 
     * Add title, body text, shapes, and charts.
-    * Insert images based on a mapping from `image_name` to file path.
+    * Insert asset images based on a mapping from `asset_name` to file path.
   * When executed as a script:
 
-    * Parse command line arguments or a config file for `output_path` and image paths.
+    * Parse command line arguments or a config file for `output_path` and asset image paths.
     * Call `main(output_path)`.
 
 #### 2.1.7 Screenshot and Image Capture Layer
@@ -166,8 +167,8 @@ The control flow follows the original diagram, with explicit states for:
   * `input/`:
 
     * `prompt.txt`
-    * reference layout image copy, if any
-    * user supplied images, renamed or symlinked to stable paths
+    * reference layout image copy, if provided
+    * user supplied asset images, renamed or symlinked to stable paths
   * `scripts/`:
 
     * all script versions with clear naming
@@ -195,9 +196,9 @@ The control flow follows the original diagram, with explicit states for:
 
   * Computes a **single scalar score**, but derived from weighted components such as:
 
-    * Completeness (are all requested elements and images present)
+    * Completeness (are all requested elements and asset images present)
     * Content accuracy (does text content reflect the prompt)
-    * Layout match (how well layout aligns with the prompt and optional reference image)
+    * Layout match (how well layout aligns with the prompt and optional reference layout image)
     * Visual quality (readability, spacing, alignment, legibility)
   * Each component is scored separately by the OpenAI model, then combined using configurable weights into a final score between 0 and 100.
 * Control decisions include:
@@ -221,26 +222,28 @@ Free form natural language description of the desired slide. Can include:
 * Brand or styling guidance (colors, fonts, tone).
 * Structural hints (columns, visual hierarchy, relationships).
 
-#### 3.1.2 Image List (zero or more items)
-
-Each input image is provided with:
-
-* `image_name` (unique identifier used in prompts and code).
-* `image_path` (location where the orchestrator can access or copy the file).
-* `image_description` describing:
-
-  * What the image represents (for example company logo, map, photo, icon).
-  * How it should be used on the slide (hero background, small badge in corner, next to a specific bullet, etc).
-
-The orchestrator passes this structured list to the OpenAI client and ensures a stable mapping from `image_name` to actual file path for the generated script.
-
-#### 3.1.3 Optional Reference Layout Image
+#### 3.1.2 Reference Layout Image (optional)
 
 * Single image that represents the desired overall layout and style.
 * Used for:
 
-  * Slide scoring.
+  * Providing visual guidance during initial script generation.
+  * Slide scoring (layout match evaluation).
   * Improvement loop prompts (visual comparison with generated screenshots).
+* This is distinct from asset images—it guides the overall design rather than being embedded in the slide.
+
+#### 3.1.3 Asset Image List (zero or more items)
+
+Each asset image is provided with:
+
+* `asset_name` (unique identifier used in prompts and code).
+* `asset_path` (location where the orchestrator can access or copy the file).
+* `asset_description` describing:
+
+  * What the image represents (for example company logo, map, photo, icon).
+  * How it should be used on the slide (hero background, small badge in corner, next to a specific bullet, etc).
+
+The orchestrator passes this structured list to the OpenAI client and ensures a stable mapping from `asset_name` to actual file path for the generated script.
 
 #### 3.1.4 Configuration
 
@@ -259,8 +262,8 @@ The orchestrator passes this structured list to the OpenAI client and ensures a 
 1. CLI collects:
 
    * Prompt.
-   * Image list with names and descriptions.
    * Optional reference layout image.
+   * Asset image list with names and descriptions.
    * Configuration overrides.
 2. Orchestrator prepares a structured OpenAI request:
 
@@ -268,7 +271,8 @@ The orchestrator passes this structured list to the OpenAI client and ensures a 
    * User content including:
 
      * The prompt.
-     * Tabular or bullet list of images with name, description, and intended usage.
+     * Reference layout image (if provided) for visual design guidance.
+     * Tabular or bullet list of asset images with name, description, and intended usage.
      * Requirements to:
 
        * Use `python-pptx`.
@@ -286,7 +290,7 @@ The orchestrator passes this structured list to the OpenAI client and ensures a 
 2. It passes:
 
    * `--output` path for the PPTX.
-   * A configuration structure or environment variable that maps `image_name` to local image file paths.
+   * A configuration structure or environment variable that maps `asset_name` to local asset image file paths.
 3. On completion:
 
    * It checks the exit code.
@@ -353,14 +357,14 @@ Slide scoring is used both to drive the improvement loop and to select the best 
 1. Inputs to scoring:
 
    * Original prompt.
-   * Structured image list (names, descriptions, intended use).
+   * Structured asset image list (names, descriptions, intended use).
    * Screenshot of the generated slide.
    * Optional reference layout image.
 2. Scoring dimensions:
 
    * **Completeness**
 
-     * Have all requested major elements (titles, bullets, diagrams, images) been represented?
+     * Have all requested major elements (titles, bullets, diagrams, asset images) been represented?
    * **Content Accuracy**
 
      * Does on slide text correctly reflect the prompt’s points and emphasis?
@@ -405,7 +409,7 @@ Slide scoring is used both to drive the improvement loop and to select the best 
      * Current script text.
      * Current screenshot.
      * Optional reference layout image.
-     * Structured image list (names and descriptions).
+     * Structured asset image list (names and descriptions).
      * Previous dimension scores and overall score (to focus improvements).
    * The model:
 
@@ -459,13 +463,13 @@ Slide scoring is used both to drive the improvement loop and to select the best 
 ## 5. Functional Requirements Summary
 
 1. Accept a detailed textual prompt.
-2. Accept zero or many images, each with a name and description, and ensure they are accessible to generated scripts.
-3. Optionally accept a reference layout image.
+2. Optionally accept a reference layout image to guide overall design and layout.
+3. Accept zero or more asset images, each with a name and description, and ensure they are accessible to generated scripts.
 4. Generate a Python script using OpenAI that:
 
    * Uses `python-pptx`.
    * Creates a single 16:9 slide.
-   * Appropriately incorporates supplied images.
+   * Appropriately incorporates supplied asset images.
 5. Execute the script using the `uv` managed environment, and validate the resulting PPTX.
 6. If execution fails, repair the script using OpenAI and retry up to `MAX_SCRIPT_RETRIES`.
 7. After a successful PPTX generation, open it in a viewer and capture a screenshot using `pyautogui`.

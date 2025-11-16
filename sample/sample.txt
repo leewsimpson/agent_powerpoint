@@ -1,0 +1,6 @@
+uv run slidegen --prompt-file .\sample_input_description.md --reference-image sample_input_image.png
+
+
+or just the slide description:
+
+uv run slidegen --prompt-file .\sample_input_slide_description.md

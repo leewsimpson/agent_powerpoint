@@ -11,7 +11,7 @@ from typing import Dict
 from pptx import Presentation
 
 from .artifacts import ArtifactManager, RunPaths
-from .config import BehaviorConfig, RuntimeConfig
+from .config import BehaviorConfig
 from .logging_config import get_logger
 from .types import ExecutionResult, ScriptStatus, ScriptVersion
 
@@ -24,12 +24,10 @@ class ExecutionEngine:
         artifact_manager: ArtifactManager,
         run_paths: RunPaths,
         behavior: BehaviorConfig,
-        runtime: RuntimeConfig,
     ) -> None:
         self._artifact_manager = artifact_manager
         self._run_paths = run_paths
         self._behavior = behavior
-        self._runtime = runtime
 
     def execute(self, script: ScriptVersion, image_map: Dict[str, Path]) -> ExecutionResult:
         output_path = self._run_paths.outputs_dir / f"slide_{script.version_id}.pptx"
@@ -167,25 +165,6 @@ class ExecutionEngine:
         logger.info("Presentation has %d slide(s)", len(presentation.slides))
 
     def _build_command(self, script_path: Path, output_path: Path, image_map_path: Path) -> list[str]:
-        if self._runtime.use_uv:
-            uv_path = shutil.which(self._runtime.uv_executable)
-            if uv_path:
-                logger.info("Using uv to execute script: %s", uv_path)
-                return [
-                    uv_path,
-                    "run",
-                    "python",
-                    str(script_path),
-                    "--output",
-                    str(output_path),
-                    "--images",
-                    str(image_map_path),
-                ]
-            if not self._runtime.allow_python_fallback:
-                error_msg = f"uv executable '{self._runtime.uv_executable}' not found and fallback disabled"
-                logger.error(error_msg)
-                raise RuntimeError(error_msg)
-            logger.warning("uv not found, falling back to Python: %s", sys.executable)
 
         logger.info("Using Python interpreter: %s", sys.executable)
         return [

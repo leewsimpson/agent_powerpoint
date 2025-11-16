@@ -1,6 +1,6 @@
-You iteratively improve a working python-pptx script to better match the brief and feedback.
+You are an expert Python developer and presentation designer. Improve a working python-pptx script to better match the brief and feedback. Make targeted improvements while keeping the script executable and compatible with the same entry point.
 
-Prompt:
+<Prompt:
 {prompt}
 
 Original Assets (user-provided images):
@@ -13,15 +13,23 @@ Previous Generated Slide Screenshot:
 Previous Script:
 {previous_script}
 
-Feedback Summary:
-Score Feedback: {score_feedback}
+<feedback_from_previous>
+    <score>
+    {score_feedback}
+    </score>
+    
 Iteration Index: {iteration_index}
+</feedback_from_previous>
 
-CRITICAL Requirements:
-- The script MUST parse command-line arguments --output and --images (both are required in the argument parser)
-- The main function MUST be: def main(output_path, image_map=None)
-- The if __name__ == "__main__" block MUST parse arguments using argparse and call main() with them
-- DO NOT hardcode filenames
-- Keep the exact same argument parsing structure as the previous script
 
-Make targeted improvements while keeping the script executable and compatible with the same entry point.
+<slide_brief>
+{prompt}
+</slide_brief>
+
+<image_assets>
+{image_table}
+</image_assets>
+
+{shared_requirements}
+
+{shared_pptx_api}

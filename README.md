@@ -1,6 +1,6 @@
 ## Python SlideGen
 
-Python SlideGen orchestrates an LLM driven workflow that converts prompt + images into a PPTX slide, complete with execution, screenshot capture, scoring, and iterative improvement loops. Prompt templates that steer the LLM live under `slidegen/prompt_templates/` and are loaded at runtime so they can be reviewed or customised without touching the codebase.
+Python SlideGen orchestrates an LLM driven workflow that converts a prompt plus optional reference layout image and asset images into a PPTX slide, complete with execution, screenshot capture, scoring, and iterative improvement loops. Prompt templates that steer the LLM live under `slidegen/prompt_templates/` and are loaded at runtime so they can be reviewed or customised without touching the codebase.
 
 ### Quick Start
 
@@ -14,8 +14,18 @@ Screenshot generation requires LibreOffice and PyMuPDF. See [HEADLESS_SETUP.md](
 	```env
 	OPENAI_USE_MOCK=true
 	DEFAULT_OUTPUT_DIR=./runs
+	
+	# For reasoning models (o1, o3, gpt-5)
+	OPENAI_REASONING_EFFORT=medium
 	```
 	Add real OpenAI credentials (`OPENAI_API_KEY`, models, etc.) when ready to integrate with the API.
+	
+	**Reasoning Effort Configuration:**
+	When using reasoning models (o1, o3, or gpt-5), the `OPENAI_REASONING_EFFORT` setting controls how deeply the model thinks before responding:
+	- `minimal`: Fastest response time, less reasoning tokens
+	- `low`: Balance between speed and reasoning
+	- `medium`: Default, balanced approach (recommended)
+	- `high`: Most thorough reasoning, slower but potentially better results
 
 2. Install dependencies (using [uv](https://github.com/astral-sh/uv) as recommended):
 	```sh
@@ -27,11 +37,11 @@ Screenshot generation requires LibreOffice and PyMuPDF. See [HEADLESS_SETUP.md](
 	# Simple slide with text
 	uv run slidegen --prompt "Quarterly Results\nRevenue up 25%\nExpanding to new markets"
 	
-	# With images
+	# With asset images
 	uv run slidegen --prompt "Product Launch" --image logo|c:/images/logo.png|Company logo top-right --image chart|c:/images/chart.png|Sales chart center
 	
-	# From a file
-	uv run slidegen --prompt-file presentation.txt
+	# With reference layout image for design guidance
+	uv run slidegen --prompt-file presentation.txt --reference-image c:/layouts/corporate_template.png
 	
 	# Use mock mode explicitly
 	uv run slidegen --prompt "Team Overview" --mock-openai
@@ -59,8 +69,8 @@ Screenshot generation requires LibreOffice and PyMuPDF. See [HEADLESS_SETUP.md](
 ```
 --prompt "text"              Inline prompt text (use \n for line breaks)
 --prompt-file path.txt       Load prompt from a text file
---image name|path|desc       Add images (repeatable). Format: name|/path/to/image.png|description
---reference-image path.png   Optional reference layout image
+--image name|path|desc       Add asset images to embed in slide (repeatable). Format: name|/path/to/image.png|description
+--reference-image path.png   Optional reference layout image for design guidance (not embedded)
 --output-dir /custom/path    Override default output directory
 --mock-openai                Force mock mode (generates deterministic slides)
 --real-openai                Force real OpenAI API usage
@@ -71,11 +81,11 @@ Screenshot generation requires LibreOffice and PyMuPDF. See [HEADLESS_SETUP.md](
 **Examples:**
 
 ```sh
-# Marketing slide with logo
+# Marketing slide with logo asset
 uv run slidegen --prompt "New Campaign\n50% off all items\nLimited time only" --image logo|c:/assets/brand.png|Top left corner
 
-# Technical presentation from file
-uv run slidegen --prompt-file architecture.txt --image diagram|./diagrams/system.png|Center aligned architecture diagram
+# Technical presentation with asset image and reference layout
+uv run slidegen --prompt-file architecture.txt --image diagram|./diagrams/system.png|Center aligned architecture diagram --reference-image ./layouts/tech_template.png
 
 # Quick test in mock mode
 uv run slidegen --prompt "Test Slide" --mock-openai --log-level DEBUG
@@ -98,8 +108,8 @@ Refer to `AGENT.md` for applied guidelines during development.
 
 ### How The Workflow Runs
 
-1. **Prompt intake** – The CLI validates the user prompt, optional image descriptors, and an optional reference layout image.
-2. **Prompt templating** – `OpenAIClient` formats disk-based templates with the current run context (prompt text, images, iteration feedback).
+1. **Prompt intake** – The CLI validates the user prompt, optional asset image descriptors, and an optional reference layout image for design guidance.
+2. **Prompt templating** – `OpenAIClient` formats disk-based templates with the current run context (prompt text, asset images, reference layout, iteration feedback).
 3. **Script generation** – In mock mode a deterministic generator returns a `python-pptx` script; in production the formatted template will be sent to the OpenAI API.
 4. **Script execution** – The `ExecutionEngine` runs the generated script via `uv run python …` when available, validates slide output, and persists logs.
 5. **Screenshot capture** – `ScreenshotService` converts PPTX to image using headless LibreOffice + PyMuPDF and stores it with the run artifacts.

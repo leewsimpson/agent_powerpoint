@@ -24,7 +24,6 @@ def test_state_machine_end_to_end(monkeypatch: Any, tmp_path: Path) -> None:
     monkeypatch.setenv("DEFAULT_OUTPUT_DIR", str(tmp_path / "runs"))
     monkeypatch.setenv("WORKSPACE_DIR", str(tmp_path))
     monkeypatch.setenv("MAX_IMPROVEMENT_ITERATIONS", "1")
-    monkeypatch.setenv("USE_UV", "false")
 
     settings = load_settings()
 

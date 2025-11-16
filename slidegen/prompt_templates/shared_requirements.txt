@@ -1,0 +1,13 @@
+<critial_requirements>
+- Implement a main(output_path, image_map=None) function that creates a single 16:9 slide.
+- Use python-pptx library only, and refer to <python-pptx_documentation_reminder> for API usage.
+- Use the supplied <image_assets> names when placing pictures.
+- The generated script needs to match the <slide_brief> completely.
+- Return only executable Python source code. No explanations.
+- A reference image may have been included. If it has - you need to make the python match that image completely.  If you think that a photo or detailed illustration is required to make it work - include a placeholder box clealy marked as placeholder.
+- Python Instructions
+    - Import argparse, json, pathlib.Path, and pptx modules
+    - Define main(output_path, image_map=None) that creates and saves the presentation
+    - In if __name__ == "__main__" block: parse --output and --images arguments, load image_map from JSON file if provided, call main()
+    - The script MUST parse command-line arguments --output and --images.
+<critial_requirements>

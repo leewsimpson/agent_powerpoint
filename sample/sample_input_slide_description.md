@@ -1,4 +1,4 @@
-# **Slide Title:**
+**Slide Title:**
 
 **Global Market Outlook, Modest Growth with Elevated Risks**
 

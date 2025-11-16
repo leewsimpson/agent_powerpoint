@@ -8,7 +8,6 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .config import ScreenshotConfig
 from .logging_config import get_logger
 
 import pymupdf
@@ -17,8 +16,7 @@ logger = get_logger(__name__)
 
 
 class ScreenshotService:
-    def __init__(self, config: ScreenshotConfig, mock_mode: bool) -> None:
-        self._config = config
+    def __init__(self, mock_mode: bool) -> None:
         self._mock_mode = mock_mode
 
     def capture(self, pptx_path: Path, destination: Path) -> Path:
